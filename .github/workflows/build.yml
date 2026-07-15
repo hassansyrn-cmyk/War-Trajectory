@@ -34,8 +34,7 @@ jobs:
         with:
           targetPlatform: Android
           unityVersion: 2022.3.15f1
-          androidAppBundle: false # Build .apk (not .aab bundle) for direct testing
-          androidTargetArchitectures: ARMv7,ARM64
+          androidExportType: androidPackage
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
