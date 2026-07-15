@@ -25,21 +25,17 @@ namespace WTM.Core
         private void OnEnable()
         {
             inputActions.Gameplay.Enable();
-            inputActions.Gameplay.TouchPress.started += OnTouchStart;
-            inputActions.Gameplay.TouchPress.canceled += OnTouchEnd;
         }
 
         private void OnDisable()
         {
-            inputActions.Gameplay.TouchPress.started -= OnTouchStart;
-            inputActions.Gameplay.TouchPress.canceled -= OnTouchEnd;
             inputActions.Gameplay.Disable();
         }
 
         private void Update()
         {
             // Process camera keyboard pans
-            Vector2 camPan = inputActions.Gameplay.CameraPan.ReadValue<Vector2>();
+            Vector2 camPan = inputActions.Gameplay.CameraPan.ReadValue();
             if (CameraController.Instance != null)
             {
                 CameraController.Instance.ApplyPan(camPan);
@@ -51,42 +47,60 @@ namespace WTM.Core
                 return;
             }
 
-            if (isDragging)
+            // Handle touch initiation manually to bypass event subscriptions in the wrapper
+            bool isPressing = false;
+            Vector2 currentTouchPos = Vector2.zero;
+
+            if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.isPressed)
             {
-                dragCurrentPos = inputActions.Gameplay.TouchPosition.ReadValue<Vector2>();
-                UpdateAimingPreview();
+                isPressing = true;
+                currentTouchPos = Touchscreen.current.primaryTouch.position.ReadValue();
             }
-        }
-
-        private void OnTouchStart(InputAction.CallbackContext context)
-        {
-            if (!GameManager.Instance.isPlayerTurn || TurnManager.Instance.IsActionInProgress) return;
-
-            // Reject touch starting in bottom Action Deck zone to prevent firing when pressing UI buttons
-            Vector2 touchStart = inputActions.Gameplay.TouchPosition.ReadValue<Vector2>();
-            if (touchStart.y < Screen.height * 0.22f) return;
-
-            isDragging = true;
-            dragStartPos = touchStart;
-            dragCurrentPos = dragStartPos;
-        }
-
-        private void OnTouchEnd(InputAction.CallbackContext context)
-        {
-            if (!isDragging) return;
-            isDragging = false;
-
-            Vector2 pullVec = dragStartPos - dragCurrentPos;
-            float dragDist = Mathf.Min(pullVec.magnitude, maxDragDistance);
-            float pct = dragDist / maxDragDistance;
-
-            if (pct >= 0.05f)
+            else if (Mouse.current != null && Mouse.current.leftButton.isPressed)
             {
-                Vector3 launchVel = CalculateLaunchVelocity(pullVec.normalized, pct);
-                TurnManager.Instance.FireProjectile(transform.position + Vector3.up, launchVel, true);
+                isPressing = true;
+                currentTouchPos = Mouse.current.position.ReadValue();
             }
 
-            CancelAimDrag();
+            if (isPressing)
+            {
+                if (!isDragging)
+                {
+                    // Touch started
+                    if (currentTouchPos.y >= Screen.height * 0.22f)
+                    {
+                        isDragging = true;
+                        dragStartPos = currentTouchPos;
+                        dragCurrentPos = dragStartPos;
+                    }
+                }
+                else
+                {
+                    // Touch dragging
+                    dragCurrentPos = currentTouchPos;
+                    UpdateAimingPreview();
+                }
+            }
+            else
+            {
+                if (isDragging)
+                {
+                    // Touch released
+                    isDragging = false;
+
+                    Vector2 pullVec = dragStartPos - dragCurrentPos;
+                    float dragDist = Mathf.Min(pullVec.magnitude, maxDragDistance);
+                    float pct = dragDist / maxDragDistance;
+
+                    if (pct >= 0.05f)
+                    {
+                        Vector3 launchVel = CalculateLaunchVelocity(pullVec.normalized, pct);
+                        TurnManager.Instance.FireProjectile(transform.position + Vector3.up, launchVel, true);
+                    }
+
+                    CancelAimDrag();
+                }
+            }
         }
 
         private void CancelAimDrag()

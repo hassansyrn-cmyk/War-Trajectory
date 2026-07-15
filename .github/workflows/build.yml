@@ -3,7 +3,8 @@ name: Build Android APK
 on:
   push:
     branches:
-      - main
+      - "feature/war-trajectory-mobile-gdd-*"
+      - "main"
   workflow_dispatch:
 
 jobs:
@@ -37,7 +38,7 @@ jobs:
           androidTargetArchitectures: ARMv7,ARM64
 
       - name: Upload Build Artifact
-        uses: actions/artifacts@v4
+        uses: actions/upload-artifact@v4
         with:
           name: WarTrajectoryMobile-Android-APK
           path: build/Android/*.apk
