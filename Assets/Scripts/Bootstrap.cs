@@ -169,7 +169,7 @@ namespace WTM.Core
             rb.mass = 80f;
 
             // Make it slightly heavy to avoid sliding
-            body.GetComponent<CapsuleCollider>().sharedMaterial = new PhysicsMaterial { frictionCombine = PhysicsMaterialCombine.Maximum, dynamicFriction = 1f, staticFriction = 1f };
+            body.GetComponent<CapsuleCollider>().sharedMaterial = new PhysicMaterial { frictionCombine = PhysicMaterialCombine.Maximum, dynamicFriction = 1f, staticFriction = 1f };
 
             return body;
         }
