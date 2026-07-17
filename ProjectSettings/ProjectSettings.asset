@@ -22,3 +22,5 @@ ProjectSettings:
   m_AndroidTargetSdkVersion: 34
   scriptingBackend:
     Android: 1
+  activeInputHandler: 1
+  enableNativePlatformBackendsForNewInputSystem: 1
