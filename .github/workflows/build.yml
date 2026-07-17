@@ -35,6 +35,7 @@ jobs:
           targetPlatform: Android
           unityVersion: 2022.3.15f1
           androidExportType: androidPackage
+          buildMethod: Builder.BuildAndroid
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
