@@ -1,0 +1,19 @@
+{
+  "warriorSpriteSheets": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "sheetWidth": 768,
+    "sheetHeight": 256,
+    "frames": [
+      "idle",
+      "attack",
+      "defeated"
+    ],
+    "layout": "horizontal"
+  },
+  "paths": {
+    "warriors": "/assets/sprites/warriors/",
+    "weapons": "/assets/sprites/weapons/",
+    "terrain": "/assets/sprites/terrain/"
+  }
+}
