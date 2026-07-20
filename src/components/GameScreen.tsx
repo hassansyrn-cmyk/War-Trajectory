@@ -16,6 +16,7 @@ import { draw } from "../game/render";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../game/physics";
 import * as audio from "../game/audio";
 import { recordResult } from "../game/storage";
+import { loadAllAssets } from "../game/assets";
 
 interface Props {
   map: MapDef;
@@ -49,6 +50,16 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
   const [, setTick] = useState(0);
   const [confirmQuit, setConfirmQuit] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [assetsLoaded, setAssetsLoaded] = useState(false);
+
+  useEffect(() => {
+    loadAllAssets()
+      .then(() => setAssetsLoaded(true))
+      .catch((err) => {
+        console.error("Critical error during preloading sprites: ", err);
+        setAssetsLoaded(true); // Fallback so the game still starts
+      });
+  }, []);
 
   useEffect(() => {
     audio.setMuted(muted);
@@ -75,6 +86,7 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
       const fitScale = Math.min(rect.width / WORLD_WIDTH, rect.height / WORLD_HEIGHT);
       const cssOffsetX = (rect.width - WORLD_WIDTH * fitScale) / 2;
       const cssOffsetY = (rect.height - WORLD_HEIGHT * fitScale) / 2;
+      console.log("RESIZE DETAILS:", rect.width, rect.height, "fitScale:", fitScale);
       viewportRef.current = {
         cssScale: fitScale,
         cssOffsetX,
@@ -94,7 +106,7 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
       ro.disconnect();
       window.removeEventListener("orientationchange", resize);
     };
-  }, []);
+  }, [assetsLoaded]);
 
   useEffect(() => {
     function loop(ts: number) {
@@ -212,6 +224,15 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
     resultRecordedRef.current = false;
     aiScheduledRoundRef.current = -1;
     setDrawerOpen(false);
+  }
+
+  if (!assetsLoaded) {
+    return (
+      <div className="game-root" style={{ display: "flex", justifyContent: "center", alignItems: "center", flexDirection: "column" }}>
+        <div style={{ fontSize: "24px", color: "#fff", marginBottom: "20px" }}>جاري تحميل الموارد الرسومية...</div>
+        <div className="pip filled" style={{ width: "30px", height: "30px", animation: "spin 1s linear infinite" }} />
+      </div>
+    );
   }
 
   return (

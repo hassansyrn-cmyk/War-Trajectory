@@ -1,6 +1,7 @@
 import { PlayerId, PlayerState, WeaponDef, archetypeById } from "./entities";
-import { Camera, GameState, MAX_DRAG, MAX_LAUNCH_SPEED, PLAYER_HEIGHT, PLAYER_WIDTH, playerFeetY, weaponById } from "./engine";
+import { Camera, GameState, MAX_DRAG, MAX_LAUNCH_SPEED, PLAYER_HEIGHT, PLAYER_WIDTH, playerFeetY, weaponById, opponentOf } from "./engine";
 import { TERRAIN_SAMPLES, WORLD_HEIGHT, WORLD_WIDTH, clamp, simulateTrajectory } from "./physics";
+import { assets } from "./assets";
 
 export interface AimState {
   active: boolean;
@@ -127,6 +128,13 @@ function drawMountainLayer(ctx: CanvasRenderingContext2D, color: string, baseY: 
   ctx.restore();
 }
 
+function getTerrainSpriteImg(mapId: string): HTMLImageElement | null {
+  if (mapId === "desert") return assets.terrain.desert;
+  if (mapId === "mountains") return assets.terrain.grass;
+  if (mapId === "volcanic") return assets.terrain.volcanic;
+  return null;
+}
+
 function drawTerrain(ctx: CanvasRenderingContext2D, state: GameState) {
   const terrain = state.terrain;
   const pts: { x: number; y: number }[] = [];
@@ -134,8 +142,22 @@ function drawTerrain(ctx: CanvasRenderingContext2D, state: GameState) {
     pts.push({ x: (i / (TERRAIN_SAMPLES - 1)) * WORLD_WIDTH, y: terrain[i] });
   }
 
-  fillTerrainBand(ctx, pts, WORLD_HEIGHT + 4, state.map.rockColor, 0);
-  fillTerrainBand(ctx, pts, WORLD_HEIGHT + 4, state.map.soilColor, 16);
+  const img = getTerrainSpriteImg(state.map.id);
+
+  if (img) {
+    // Generate pattern
+    const pattern = ctx.createPattern(img, "repeat");
+    if (pattern) {
+      fillTerrainBand(ctx, pts, WORLD_HEIGHT + 4, pattern, 0);
+    } else {
+      fillTerrainBand(ctx, pts, WORLD_HEIGHT + 4, state.map.soilColor, 0);
+    }
+  } else {
+    fillTerrainBand(ctx, pts, WORLD_HEIGHT + 4, state.map.rockColor, 0);
+    fillTerrainBand(ctx, pts, WORLD_HEIGHT + 4, state.map.soilColor, 16);
+  }
+
+  // Draw top dynamic terrain boundary surface
   const g = ctx.createLinearGradient(0, WORLD_HEIGHT * 0.4, 0, WORLD_HEIGHT * 0.4 + 30);
   g.addColorStop(0, state.map.groundTop);
   g.addColorStop(1, state.map.groundBottom);
@@ -157,7 +179,7 @@ function fillTerrainBand(
   ctx: CanvasRenderingContext2D,
   pts: { x: number; y: number }[],
   bottomY: number,
-  fill: string | CanvasGradient,
+  fill: string | CanvasGradient | CanvasPattern,
   yOffset: number,
   onlyTopThickness = 0
 ) {
@@ -255,26 +277,51 @@ function drawWindIndicator(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.restore();
 }
 
+function getWarriorSpriteImg(archetypeId: string): HTMLImageElement | null {
+  if (archetypeId === "axe-warrior") return assets.warriors.viking;
+  if (archetypeId === "forest-archer") return assets.warriors.archer;
+  if (archetypeId === "shadow-scout") return assets.warriors.ninja;
+  if (archetypeId === "knight-warrior") return assets.warriors.knight;
+  if (archetypeId === "engineer-warrior") return assets.warriors.engineer;
+  return null;
+}
+
 function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState, id: PlayerId, aim: AimState) {
   const player = state.players[id];
   const archetype = archetypeById(player.archetype);
   const feetY = playerFeetY(state, id);
-  const top = feetY - PLAYER_HEIGHT;
   const isActive = state.turn === id && state.phase !== "gameOver";
-  const isAiming = isActive && state.phase === "aiming" && aim.active;
 
+  const img = getWarriorSpriteImg(player.archetype);
+
+  // Determine facing towards opponent
+  const opponent = state.players[opponentOf(id)];
+  const facingDir = opponent.x > player.x ? 1 : -1;
+
+  // Visual size logic: width & height
+  const drawW = 68;
+  const drawH = 68;
+
+  // Bobbing animation for active player to keep it alive
+  let bobY = 0;
+  if (isActive && state.phase === "aiming") {
+    bobY = Math.sin(frameClock * 7) * 2;
+  }
+
+  // Pre-calculate sizing for consistency (shields, status, health bars, fallback drawing)
   const buildWidthMul = archetype.build === "bulky" ? 1.18 : archetype.build === "agile" ? 0.86 : 1;
   const w = PLAYER_WIDTH * buildWidthMul;
   const h = PLAYER_HEIGHT * (archetype.build === "bulky" ? 0.96 : 1.04);
-  const bodyTop = feetY - h;
+  const bodyTop = feetY - h + bobY;
 
   ctx.save();
 
+  // Shadow drawing
   ctx.save();
   ctx.globalAlpha = 0.35;
   ctx.fillStyle = "#000000";
   ctx.beginPath();
-  ctx.ellipse(player.x, feetY + 2, w * 0.75, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(player.x, feetY + 2, drawW * 0.42, 5, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
@@ -283,64 +330,89 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState, id: PlayerI
     ctx.shadowBlur = 20;
   }
 
-  ctx.fillStyle = archetype.bodyColorDark;
-  roundRect(ctx, player.x - w * 0.32 + player.facing * 2, feetY - h * 0.34, w * 0.24, h * 0.34, 4);
-  ctx.fill();
+  if (img) {
+    // Determine Sprite Sheet Frame
+    // Frame 0: idle, Frame 1: attack, Frame 2: defeated
+    let frameIdx = 0;
+    if (player.hp <= 0) {
+      frameIdx = 2;
+    } else if (player.attackTimer !== undefined && player.attackTimer > 0) {
+      frameIdx = 1;
+    }
 
-  ctx.strokeStyle = archetype.bodyColorDark;
-  ctx.lineWidth = w * 0.22;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(player.x - player.facing * w * 0.18, bodyTop + h * 0.46);
-  ctx.lineTo(player.x - player.facing * w * 0.55, bodyTop + h * 0.66);
-  ctx.stroke();
+    // Source coordinates on the 768x256 image sheet
+    const sWidth = 256;
+    const sHeight = 256;
+    const sx = frameIdx * sWidth;
+    const sy = 0;
 
-  ctx.fillStyle = archetype.bodyColor;
-  roundRect(ctx, player.x - w / 2, bodyTop + h * 0.3, w, h * 0.52, w * 0.22);
-  ctx.fill();
-  ctx.fillStyle = archetype.accentColor;
-  ctx.globalAlpha = 0.85;
-  roundRect(ctx, player.x - w * 0.09, bodyTop + h * 0.34, w * 0.18, h * 0.4, w * 0.06);
-  ctx.fill();
-  ctx.globalAlpha = 1;
+    ctx.save();
+    ctx.translate(player.x, feetY - drawH / 2 + bobY);
+    ctx.scale(facingDir, 1);
+    ctx.drawImage(
+      img,
+      sx, sy, sWidth, sHeight,
+      -drawW / 2, -drawH / 2, drawW, drawH
+    );
+    ctx.restore();
+  } else {
+    // Fallback vector drawing if image failed to load or in node tests
+    ctx.fillStyle = archetype.bodyColorDark;
+    roundRect(ctx, player.x - w * 0.32 + facingDir * 2, feetY - h * 0.34 + bobY, w * 0.24, h * 0.34, 4);
+    ctx.fill();
 
-  ctx.fillStyle = archetype.bodyColorDark;
-  roundRect(ctx, player.x + w * 0.08 - player.facing * 2, feetY - h * 0.36, w * 0.26, h * 0.36, 4);
-  ctx.fill();
+    ctx.strokeStyle = archetype.bodyColorDark;
+    ctx.lineWidth = w * 0.22;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(player.x - facingDir * w * 0.18, bodyTop + h * 0.46);
+    ctx.lineTo(player.x - facingDir * w * 0.55, bodyTop + h * 0.66);
+    ctx.stroke();
 
-  const headCY = bodyTop + h * 0.16;
-  const headR = h * 0.155;
-  ctx.beginPath();
-  ctx.arc(player.x, headCY, headR, 0, Math.PI * 2);
-  ctx.fillStyle = archetype.skinColor;
-  ctx.fill();
+    ctx.fillStyle = archetype.bodyColor;
+    roundRect(ctx, player.x - w / 2, bodyTop + h * 0.3, w, h * 0.52, w * 0.22);
+    ctx.fill();
+    ctx.fillStyle = archetype.accentColor;
+    ctx.globalAlpha = 0.85;
+    roundRect(ctx, player.x - w * 0.09, bodyTop + h * 0.34, w * 0.18, h * 0.4, w * 0.06);
+    ctx.fill();
+    ctx.globalAlpha = 1;
 
-  drawHelmet(ctx, archetype.helmet, player.x, headCY, headR, archetype.bodyColorDark, archetype.accentColor);
+    ctx.fillStyle = archetype.bodyColorDark;
+    roundRect(ctx, player.x + w * 0.08 - facingDir * 2, feetY - h * 0.36 + bobY, w * 0.26, h * 0.36, 4);
+    ctx.fill();
 
-  const weapon = weaponById(state.selectedWeapon[id]);
-  let armAngle = -0.35 * player.facing;
-  if (isAiming) {
-    armAngle = Math.atan2(aim.dragY, aim.dragX * player.facing) * 0.4 - 0.15 * player.facing;
+    const headCY = bodyTop + h * 0.16;
+    const headR = h * 0.155;
+    ctx.beginPath();
+    ctx.arc(player.x, headCY, headR, 0, Math.PI * 2);
+    ctx.fillStyle = archetype.skinColor;
+    ctx.fill();
+
+    drawHelmet(ctx, archetype.helmet, player.x, headCY, headR, archetype.bodyColorDark, archetype.accentColor);
   }
-  const shoulderX = player.x + player.facing * w * 0.12;
-  const shoulderY = bodyTop + h * 0.44;
-  const handX = shoulderX + Math.cos(armAngle) * w * 0.9 * player.facing;
-  const handY = shoulderY + Math.sin(armAngle) * w * 0.9;
 
-  ctx.strokeStyle = archetype.bodyColor;
-  ctx.lineWidth = w * 0.24;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(shoulderX, shoulderY);
-  ctx.lineTo(handX, handY);
-  ctx.stroke();
+  // Draw currently held weapon in hand (Only if not in attack frame, and player is still alive)
+  const isAttacking = (player.attackTimer !== undefined && player.attackTimer > 0);
+  if (player.hp > 0 && !isAttacking) {
+    const weapon = weaponById(state.selectedWeapon[id]);
+    const isAiming = isActive && state.phase === "aiming" && aim.active;
+    let armAngle = -0.35 * facingDir;
+    if (isAiming) {
+      armAngle = Math.atan2(aim.dragY, aim.dragX * facingDir) * 0.4 - 0.15 * facingDir;
+    }
+    const shoulderX = player.x + facingDir * 8;
+    const shoulderY = feetY - drawH * 0.46 + bobY;
+    const handX = shoulderX + Math.cos(armAngle) * 14 * facingDir;
+    const handY = shoulderY + Math.sin(armAngle) * 14;
 
-  ctx.save();
-  ctx.translate(handX, handY);
-  const weaponAngle = player.facing > 0 ? -0.5 : Math.PI + 0.5;
-  ctx.rotate(weaponAngle);
-  drawWeaponGlyph(ctx, weapon.type, 1.15, weapon.colorMain, "#e8edf5");
-  ctx.restore();
+    ctx.save();
+    ctx.translate(handX, handY);
+    const weaponAngle = facingDir > 0 ? -0.5 : Math.PI + 0.5;
+    ctx.rotate(weaponAngle);
+    drawWeaponGlyph(ctx, weapon.type, 1.15, weapon.colorMain, "#e8edf5");
+    ctx.restore();
+  }
 
   ctx.restore();
 
@@ -425,140 +497,188 @@ function drawHelmet(
   ctx.restore();
 }
 
+function getWeaponSpriteImg(type: WeaponDef["type"]): HTMLImageElement | null {
+  if (type === "arrow") return assets.weapons.arrow;
+  if (type === "axe") return assets.weapons.axe;
+  if (type === "fire") return assets.weapons.fire;
+  if (type === "grenade") return assets.weapons.grenade;
+  if (type === "ice") return assets.weapons.ice;
+  if (type === "rocket") return assets.weapons.rocket;
+  if (type === "shuriken") return assets.weapons.shuriken;
+  if (type === "spear") return assets.weapons.spear;
+  return null;
+}
+
+// Map each weapon's visual drawing size/dimensions for correct scale
+function getWeaponVisualBounds(type: WeaponDef["type"]) {
+  if (type === "fire" || type === "ice") {
+    return { w: 32, h: 14 };
+  }
+  if (type === "spear") {
+    return { w: 26, h: 18 };
+  }
+  if (type === "arrow" || type === "rocket" || type === "axe" || type === "shuriken" || type === "grenade") {
+    return { w: 18, h: 18 };
+  }
+  return { w: 16, h: 16 };
+}
+
+function getWeaponAngleOffset(type: WeaponDef["type"]): number {
+  // If the PNG default direction is not directly pointing right, we can offset it.
+  // Standard arrows, spears, rockets are pointing right.
+  // Let's adjust slightly if needed.
+  if (type === "spear") return -0.4;
+  return 0;
+}
+
 function drawWeaponGlyph(ctx: CanvasRenderingContext2D, type: WeaponDef["type"], scale: number, colorMain: string, colorAccent: string) {
+  const img = getWeaponSpriteImg(type);
+  const bounds = getWeaponVisualBounds(type);
+
   ctx.save();
   ctx.scale(scale, scale);
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
 
-  if (type === "arrow" || type === "fire" || type === "ice") {
-    ctx.strokeStyle = "#8a6a3c";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-11, 0);
-    ctx.lineTo(7, 0);
-    ctx.stroke();
-    ctx.fillStyle = colorAccent;
-    ctx.beginPath();
-    ctx.moveTo(-11, 0);
-    ctx.lineTo(-16, -4);
-    ctx.lineTo(-14, 0);
-    ctx.lineTo(-16, 4);
-    ctx.closePath();
-    ctx.fill();
-    if (type === "arrow") {
-      ctx.fillStyle = "#c8ccd4";
+  if (img) {
+    ctx.save();
+    const offset = getWeaponAngleOffset(type);
+    ctx.rotate(offset);
+    ctx.drawImage(img, -bounds.w / 2, -bounds.h / 2, bounds.w, bounds.h);
+    ctx.restore();
+  } else {
+    // Vector Fallback
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    if (type === "arrow" || type === "fire" || type === "ice") {
+      ctx.strokeStyle = "#8a6a3c";
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(7, 0);
-      ctx.lineTo(2, -3.4);
-      ctx.lineTo(2, 3.4);
+      ctx.moveTo(-11, 0);
+      ctx.lineTo(7, 0);
+      ctx.stroke();
+      ctx.fillStyle = colorAccent;
+      ctx.beginPath();
+      ctx.moveTo(-11, 0);
+      ctx.lineTo(-16, -4);
+      ctx.lineTo(-14, 0);
+      ctx.lineTo(-16, 4);
       ctx.closePath();
       ctx.fill();
-    } else if (type === "fire") {
+      if (type === "arrow") {
+        ctx.fillStyle = "#c8ccd4";
+        ctx.beginPath();
+        ctx.moveTo(7, 0);
+        ctx.lineTo(2, -3.4);
+        ctx.lineTo(2, 3.4);
+        ctx.closePath();
+        ctx.fill();
+      } else if (type === "fire") {
+        ctx.fillStyle = colorMain;
+        ctx.beginPath();
+        ctx.ellipse(7, 0, 5, 3.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#ffe4a8";
+        ctx.beginPath();
+        ctx.ellipse(8.5, -0.5, 2.4, 1.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = colorMain;
+        ctx.beginPath();
+        ctx.moveTo(9, 0);
+        ctx.lineTo(4, -3.2);
+        ctx.lineTo(2, 0);
+        ctx.lineTo(4, 3.2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.7)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    } else if (type === "spear") {
+      ctx.strokeStyle = "#8a6a3c";
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.moveTo(-16, 0);
+      ctx.lineTo(9, 0);
+      ctx.stroke();
+      ctx.fillStyle = colorAccent;
+      ctx.beginPath();
+      ctx.moveTo(9, 0);
+      ctx.lineTo(3, -4.4);
+      ctx.lineTo(3, 4.4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#5c4522";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(1, -3);
+      ctx.lineTo(1, 3);
+      ctx.stroke();
+    } else if (type === "axe" || type === "shuriken") {
+      ctx.strokeStyle = "#6b4a2a";
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(-9, 5);
+      ctx.lineTo(8, -5);
+      ctx.stroke();
       ctx.fillStyle = colorMain;
       ctx.beginPath();
-      ctx.ellipse(7, 0, 5, 3.4, 0, 0, Math.PI * 2);
+      ctx.moveTo(3, -8);
+      ctx.quadraticCurveTo(14, -11, 13, -1);
+      ctx.quadraticCurveTo(10, 3, 2, 0);
+      ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = "#ffe4a8";
+      ctx.strokeStyle = "rgba(255,255,255,0.5)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    } else if (type === "grenade") {
+      ctx.fillStyle = colorMain;
       ctx.beginPath();
-      ctx.ellipse(8.5, -0.5, 2.4, 1.6, 0, 0, Math.PI * 2);
+      ctx.arc(0, 1, 6.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#3f4652";
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.arc(0, 1, 6.4, 0.3, 2.6);
+      ctx.stroke();
+      ctx.strokeStyle = "#9aa4b8";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-1, -5);
+      ctx.lineTo(2, -9);
+      ctx.stroke();
+    } else if (type === "rocket") {
+      ctx.fillStyle = colorMain;
+      roundRect(ctx, -9, -3.4, 15, 6.8, 3);
+      ctx.fill();
+      ctx.fillStyle = "#e8edf5";
+      ctx.beginPath();
+      ctx.moveTo(6, -3.4);
+      ctx.lineTo(13, 0);
+      ctx.lineTo(6, 3.4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#3f4652";
+      ctx.beginPath();
+      ctx.moveTo(-9, -3.4);
+      ctx.lineTo(-14, -7);
+      ctx.lineTo(-9, -1.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-9, 3.4);
+      ctx.lineTo(-14, 7);
+      ctx.lineTo(-9, 1.5);
+      ctx.closePath();
       ctx.fill();
     } else {
       ctx.fillStyle = colorMain;
       ctx.beginPath();
-      ctx.moveTo(9, 0);
-      ctx.lineTo(4, -3.2);
-      ctx.lineTo(2, 0);
-      ctx.lineTo(4, 3.2);
-      ctx.closePath();
+      ctx.arc(0, 0, 6, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.7)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
     }
-  } else if (type === "spear") {
-    ctx.strokeStyle = "#8a6a3c";
-    ctx.lineWidth = 2.6;
-    ctx.beginPath();
-    ctx.moveTo(-16, 0);
-    ctx.lineTo(9, 0);
-    ctx.stroke();
-    ctx.fillStyle = colorAccent;
-    ctx.beginPath();
-    ctx.moveTo(9, 0);
-    ctx.lineTo(3, -4.4);
-    ctx.lineTo(3, 4.4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = "#5c4522";
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.moveTo(1, -3);
-    ctx.lineTo(1, 3);
-    ctx.stroke();
-  } else if (type === "axe") {
-    ctx.strokeStyle = "#6b4a2a";
-    ctx.lineWidth = 2.4;
-    ctx.beginPath();
-    ctx.moveTo(-9, 5);
-    ctx.lineTo(8, -5);
-    ctx.stroke();
-    ctx.fillStyle = colorMain;
-    ctx.beginPath();
-    ctx.moveTo(3, -8);
-    ctx.quadraticCurveTo(14, -11, 13, -1);
-    ctx.quadraticCurveTo(10, 3, 2, 0);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.5)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  } else if (type === "grenade") {
-    ctx.fillStyle = colorMain;
-    ctx.beginPath();
-    ctx.arc(0, 1, 6.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#3f4652";
-    ctx.lineWidth = 1.3;
-    ctx.beginPath();
-    ctx.arc(0, 1, 6.4, 0.3, 2.6);
-    ctx.stroke();
-    ctx.strokeStyle = "#9aa4b8";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-1, -5);
-    ctx.lineTo(2, -9);
-    ctx.stroke();
-  } else if (type === "rocket") {
-    ctx.fillStyle = colorMain;
-    roundRect(ctx, -9, -3.4, 15, 6.8, 3);
-    ctx.fill();
-    ctx.fillStyle = "#e8edf5";
-    ctx.beginPath();
-    ctx.moveTo(6, -3.4);
-    ctx.lineTo(13, 0);
-    ctx.lineTo(6, 3.4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "#3f4652";
-    ctx.beginPath();
-    ctx.moveTo(-9, -3.4);
-    ctx.lineTo(-14, -7);
-    ctx.lineTo(-9, -1.5);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(-9, 3.4);
-    ctx.lineTo(-14, 7);
-    ctx.lineTo(-9, 1.5);
-    ctx.closePath();
-    ctx.fill();
-  } else {
-    ctx.fillStyle = colorMain;
-    ctx.beginPath();
-    ctx.arc(0, 0, 6, 0, Math.PI * 2);
-    ctx.fill();
   }
+
   ctx.restore();
 }
 
@@ -622,12 +742,13 @@ function drawProjectile(ctx: CanvasRenderingContext2D, state: GameState) {
 
   const angle = Math.atan2(proj.vy, proj.vx);
   ctx.translate(proj.x, proj.y);
-  if (proj.weapon.type === "axe") {
-    ctx.rotate(frameClock * 22 * (proj.vx >= 0 ? 1 : -1));
+  if (proj.weapon.type === "axe" || proj.weapon.type === "shuriken") {
+    // Fast continuous spin during flight for spin weapons
+    ctx.rotate(frameClock * 28 * (proj.vx >= 0 ? 1 : -1));
   } else {
     ctx.rotate(angle);
   }
-  drawWeaponGlyph(ctx, proj.weapon.type, 1, proj.weapon.colorMain, "#e8edf5");
+  drawWeaponGlyph(ctx, proj.weapon.type, 1.25, proj.weapon.colorMain, "#e8edf5");
   ctx.restore();
 }
 

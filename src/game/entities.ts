@@ -1,7 +1,7 @@
 // Core types and static game-content definitions for War Trajectory.
 
 export type PlayerId = "p1" | "p2";
-export type ProjectileType = "arrow" | "spear" | "axe" | "grenade" | "rocket" | "fire" | "ice";
+export type ProjectileType = "arrow" | "spear" | "axe" | "grenade" | "rocket" | "fire" | "ice" | "shuriken";
 export type HitZone = "head" | "body";
 export type GamePhase = "aiming" | "flying" | "resolving" | "gameOver";
 export type Difficulty = "easy" | "normal" | "hard";
@@ -66,6 +66,20 @@ export const WEAPONS: WeaponDef[] = [
     ricochet: true,
     colorMain: "#b8b8c2",
     colorTrail: "rgba(184,184,194,0.5)",
+  },
+  {
+    id: "shuriken",
+    nameAr: "شوريكين",
+    type: "shuriken",
+    damage: 22,
+    speedScale: 1.1,
+    weightDrag: 0.95,
+    gravityScale: 0.88,
+    splashRadius: 0,
+    ammo: 3,
+    ricochet: false,
+    colorMain: "#94a3b8",
+    colorTrail: "rgba(148,163,184,0.5)",
   },
   {
     id: "grenade",
@@ -247,7 +261,7 @@ export interface WarriorArchetype {
 export const ARCHETYPES: WarriorArchetype[] = [
   {
     id: "axe-warrior",
-    nameAr: "محارب الفأس الشمالي",
+    nameAr: "الفولاذي الشمالي (Viking)",
     build: "bulky",
     bodyColor: "#3f6fb0",
     bodyColorDark: "#1c3a5c",
@@ -258,7 +272,7 @@ export const ARCHETYPES: WarriorArchetype[] = [
   },
   {
     id: "forest-archer",
-    nameAr: "رامي الغابة",
+    nameAr: "رامي السهام (Archer)",
     build: "lean",
     bodyColor: "#d95c5c",
     bodyColorDark: "#6b2323",
@@ -269,14 +283,36 @@ export const ARCHETYPES: WarriorArchetype[] = [
   },
   {
     id: "shadow-scout",
-    nameAr: "كشّاف الظل",
+    nameAr: "نينجا الظل (Ninja)",
     build: "agile",
     bodyColor: "#6b46c1",
     bodyColorDark: "#2f1f52",
     skinColor: "#d9a877",
     accentColor: "#67e8f9",
     helmet: "cap",
+    signatureWeapon: "shuriken",
+  },
+  {
+    id: "knight-warrior",
+    nameAr: "الفارس المدرع (Knight)",
+    build: "bulky",
+    bodyColor: "#94a3b8",
+    bodyColorDark: "#475569",
+    skinColor: "#fbcfe8",
+    accentColor: "#fbbf24",
+    helmet: "horned",
     signatureWeapon: "spear",
+  },
+  {
+    id: "engineer-warrior",
+    nameAr: "المهندس التكتيكي (Engineer)",
+    build: "lean",
+    bodyColor: "#f97316",
+    bodyColorDark: "#ea580c",
+    skinColor: "#fed7aa",
+    accentColor: "#3b82f6",
+    helmet: "cap",
+    signatureWeapon: "grenade",
   },
 ];
 
@@ -306,6 +342,7 @@ export interface PlayerState {
   cooldowns: Record<string, number>;
   status: StatusEffects;
   damageMultiplierNext: number;
+  attackTimer?: number; // tracker for how long the attack frame is shown (in seconds)
 }
 
 export function freshAmmo(): Record<string, number> {
