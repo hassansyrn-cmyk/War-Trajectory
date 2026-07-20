@@ -11,6 +11,7 @@ import {
   WEAPONS,
   WeaponDef,
   makePlayer,
+  ARCHETYPES,
 } from "./entities";
 import {
   Decoration,
@@ -89,10 +90,38 @@ export function createGame(map: MapDef, difficulty: Difficulty, seed = Date.now(
   const decorations = generateDecorations(seed);
   const p1x = WORLD_WIDTH * 0.14;
   const p2x = WORLD_WIDTH * 0.86;
-  const players: Record<PlayerId, PlayerState> = {
-    p1: makePlayer("p1", "أنت", p1x, 1, "axe-warrior"),
-    p2: makePlayer("p2", "الخصم", p2x, -1, "forest-archer"),
+
+  // Select two unique random archetypes from the 5 available
+  // To keep matches seeded/deterministic when a seed is provided, we can use a seeded random generator.
+  // We already have mulberry32 seed-based random in physics.ts, let's write a simple deterministic shuffler or just use Math.random() for real matches
+  // and seeded if needed. Let's do a simple mulberry32 generator.
+  const rndVal = (seed: number) => {
+    let a = seed | 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+
+  const pool = ["axe-warrior", "forest-archer", "shadow-scout", "knight-warrior", "engineer-warrior"];
+  let r1 = rndVal(seed);
+  let idx1 = Math.floor(r1 * pool.length);
+  const arch1 = pool[idx1];
+  pool.splice(idx1, 1);
+
+  let r2 = rndVal(seed + 123);
+  let idx2 = Math.floor(r2 * pool.length);
+  const arch2 = pool[idx2];
+
+  const players: Record<PlayerId, PlayerState> = {
+    p1: makePlayer("p1", "أنت", p1x, 1, arch1),
+    p2: makePlayer("p2", "الخصم", p2x, -1, arch2),
+  };
+
+  // Determine starting default/signature weapons for both players
+  const p1Signature = ARCHETYPES.find(a => a.id === arch1)?.signatureWeapon || "bow";
+  const p2Signature = ARCHETYPES.find(a => a.id === arch2)?.signatureWeapon || "bow";
+
   return {
     map,
     terrain,
@@ -101,7 +130,7 @@ export function createGame(map: MapDef, difficulty: Difficulty, seed = Date.now(
     turn: "p1",
     phase: "aiming",
     players,
-    selectedWeapon: { p1: "bow", p2: "bow" },
+    selectedWeapon: { p1: p1Signature, p2: p2Signature },
     projectile: null,
     particles: [],
     floaters: [],
@@ -198,6 +227,10 @@ export function fire(state: GameState, playerId: PlayerId, dragX: number, dragY:
   if (Number.isFinite(player.ammo[weapon.id])) {
     player.ammo[weapon.id] -= 1;
   }
+
+  // Set the attack frame active for ~400ms when weapon is fired
+  player.attackTimer = 0.4;
+
   state.phase = "flying";
 }
 
@@ -303,6 +336,17 @@ function beginResolve(state: GameState) {
 
 export function update(state: GameState, dtRaw: number) {
   const dt = Math.min(dtRaw, 0.1);
+
+  // Update attack timers
+  for (const id of ["p1", "p2"] as const) {
+    const player = state.players[id];
+    if (player.attackTimer !== undefined && player.attackTimer > 0) {
+      player.attackTimer -= dt;
+      if (player.attackTimer <= 0) {
+        player.attackTimer = 0;
+      }
+    }
+  }
 
   for (let i = state.particles.length - 1; i >= 0; i--) {
     const p = state.particles[i];
