@@ -1,9 +1,9 @@
 // Terrain generation and shared physics helpers.
 
-export const WORLD_WIDTH = 1000;
-export const WORLD_HEIGHT = 560;
-export const GRAVITY = 340; // world units / s^2 (tuned for readable arcs)
-export const TERRAIN_SAMPLES = 220;
+export const WORLD_WIDTH = 1280;
+export const WORLD_HEIGHT = 600;
+export const GRAVITY = 360; // world units / s^2 (tuned for readable arcs)
+export const TERRAIN_SAMPLES = 260;
 
 export function generateTerrain(seed: number, roughness: number): number[] {
   const heights = new Array(TERRAIN_SAMPLES).fill(0);
@@ -28,7 +28,35 @@ export function generateTerrain(seed: number, roughness: number): number[] {
     heights[i] = WORLD_HEIGHT * 0.62 * (1 - edgeFalloff) + base[i] * edgeFalloff;
     heights[i] = Math.min(Math.max(heights[i], WORLD_HEIGHT * 0.38), WORLD_HEIGHT * 0.86);
   }
-  return heights;
+
+  // Light 3-tap smoothing pass so the silhouette reads as a soft rolling
+  // curve rather than a jagged sine sum, without flattening real hills.
+  const smoothed = heights.slice();
+  for (let i = 1; i < TERRAIN_SAMPLES - 1; i++) {
+    smoothed[i] = heights[i - 1] * 0.25 + heights[i] * 0.5 + heights[i + 1] * 0.25;
+  }
+  return smoothed;
+}
+
+export interface Decoration {
+  x: number;
+  type: "grass" | "rock" | "bush";
+  size: number;
+  flip: boolean;
+}
+
+// Deterministic surface decoration placed once per match; individual pieces
+// are removed later if an explosion crater consumes their position.
+export function generateDecorations(seed: number, count = 26): Decoration[] {
+  const rnd = mulberry32(seed + 777);
+  const decos: Decoration[] = [];
+  for (let i = 0; i < count; i++) {
+    const x = WORLD_WIDTH * (0.05 + rnd() * 0.9);
+    const roll = rnd();
+    const type: Decoration["type"] = roll < 0.55 ? "grass" : roll < 0.8 ? "rock" : "bush";
+    decos.push({ x, type, size: 0.7 + rnd() * 0.8, flip: rnd() > 0.5 });
+  }
+  return decos.sort((a, b) => a.x - b.x);
 }
 
 function mulberry32(a: number) {

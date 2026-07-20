@@ -1,6 +1,7 @@
 import { MAPS, Difficulty } from "../src/game/entities";
 import { aiChooseAndFire, createGame, fire, GameState, selectWeapon, update, useSkill } from "../src/game/engine";
 import { WEAPONS, SKILLS } from "../src/game/entities";
+import { WORLD_WIDTH } from "../src/game/physics";
 
 let totalMatches = 0;
 let totalTurnsAcrossMatches = 0;
@@ -46,12 +47,19 @@ function playMatch(mapId: string, difficulty: Difficulty, seed: number) {
         console.error(`HP out of range: ${p.hp} for ${id}`);
         errors++;
       }
-      if (p.x < -50 || p.x > 1050) {
+      if (p.x < -50 || p.x > WORLD_WIDTH + 50) {
         console.error(`Player x out of world bounds: ${p.x}`);
         errors++;
       }
     }
     for (const h of state.terrain) assertFinite("terrainHeight", h, `terrain @ turn ${turns}`);
+    assertFinite("camera.x", state.camera.x, `turn ${turns}`);
+    assertFinite("camera.y", state.camera.y, `turn ${turns}`);
+    assertFinite("camera.zoom", state.camera.zoom, `turn ${turns}`);
+    if (state.camera.zoom <= 0) {
+      console.error(`Camera zoom non-positive: ${state.camera.zoom}`);
+      errors++;
+    }
 
     if (state.phase === "aiming") {
       const acting = state.turn;

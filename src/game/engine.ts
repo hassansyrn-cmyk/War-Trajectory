@@ -13,6 +13,7 @@ import {
   makePlayer,
 } from "./entities";
 import {
+  Decoration,
   GRAVITY,
   TERRAIN_SAMPLES,
   WORLD_HEIGHT,
@@ -20,23 +21,32 @@ import {
   clamp,
   deformTerrain,
   dist,
+  generateDecorations,
   generateTerrain,
   simulateTrajectory,
   terrainHeightAt,
 } from "./physics";
 
-export const PLAYER_HEIGHT = 44;
-export const PLAYER_WIDTH = 22;
-export const PLAYER_HIT_RADIUS = 30;
+export const PLAYER_HEIGHT = 64;
+export const PLAYER_WIDTH = 30;
+export const PLAYER_HIT_RADIUS = 36;
 export const HEAD_MULT = 2.2;
-export const MAX_DRAG = 230;
-export const MAX_LAUNCH_SPEED = 560;
+export const MAX_DRAG = 295;
+export const MAX_LAUNCH_SPEED = 720;
 const STEP = 1 / 120;
 const RESOLVE_TIME = 0.9;
+const CAMERA_EASE = 5;
+
+export interface Camera {
+  x: number;
+  y: number;
+  zoom: number;
+}
 
 export interface GameState {
   map: MapDef;
   terrain: number[];
+  decorations: Decoration[];
   wind: number;
   turn: PlayerId;
   phase: GamePhase;
@@ -51,6 +61,7 @@ export interface GameState {
   difficulty: Difficulty;
   round: number;
   log: string[];
+  camera: Camera;
 }
 
 export function weaponById(id: string): WeaponDef {
@@ -75,15 +86,17 @@ export function headZoneBottom(state: GameState, id: PlayerId): number {
 
 export function createGame(map: MapDef, difficulty: Difficulty, seed = Date.now()): GameState {
   const terrain = generateTerrain(seed, map.roughness);
-  const p1x = WORLD_WIDTH * 0.16;
-  const p2x = WORLD_WIDTH * 0.84;
+  const decorations = generateDecorations(seed);
+  const p1x = WORLD_WIDTH * 0.14;
+  const p2x = WORLD_WIDTH * 0.86;
   const players: Record<PlayerId, PlayerState> = {
-    p1: makePlayer("p1", "أنت", p1x, 1, "#3ba7ff", "#1c4d7a"),
-    p2: makePlayer("p2", "الخصم", p2x, -1, "#ff5c5c", "#7a2323"),
+    p1: makePlayer("p1", "أنت", p1x, 1, "axe-warrior"),
+    p2: makePlayer("p2", "الخصم", p2x, -1, "forest-archer"),
   };
   return {
     map,
     terrain,
+    decorations,
     wind: randomWind(map.windRange),
     turn: "p1",
     phase: "aiming",
@@ -98,6 +111,7 @@ export function createGame(map: MapDef, difficulty: Difficulty, seed = Date.now(
     difficulty,
     round: 1,
     log: [],
+    camera: { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2, zoom: 1 },
   };
 }
 
@@ -275,6 +289,7 @@ function handleTerrainImpact(state: GameState, proj: Projectile) {
   const craterRadius = weapon.splashRadius > 0 ? weapon.splashRadius * 0.95 : 15;
   const craterDepth = weapon.splashRadius > 0 ? 30 : 9;
   state.terrain = deformTerrain(state.terrain, proj.x, craterRadius, craterDepth);
+  state.decorations = state.decorations.filter((d) => Math.abs(d.x - proj.x) > craterRadius * 0.8);
   spawnBurst(state, proj.x, proj.y, weapon.colorMain, weapon.splashRadius > 0 ? 26 : 10, weapon.splashRadius > 0 ? 150 : 70);
   applyExplosion(state, proj.x, proj.y, weapon, proj.ownerId);
   state.projectile = null;
@@ -326,6 +341,43 @@ export function update(state: GameState, dtRaw: number) {
       }
     }
   }
+
+  updateCamera(state, dt);
+}
+
+function updateCamera(state: GameState, dt: number) {
+  let targetX: number;
+  let targetY: number;
+  let targetZoom: number;
+
+  if (state.phase === "flying" && state.projectile) {
+    targetX = state.projectile.x;
+    targetY = state.projectile.y;
+    targetZoom = 1.05;
+  } else if (state.phase === "aiming") {
+    const active = state.players[state.turn];
+    const other = state.players[opponentOf(state.turn)];
+    targetX = active.x * 0.68 + other.x * 0.32;
+    targetY = (playerFeetY(state, "p1") + playerFeetY(state, "p2")) / 2 - PLAYER_HEIGHT * 0.5;
+    targetZoom = 1.14;
+  } else {
+    const p1 = state.players.p1;
+    const p2 = state.players.p2;
+    targetX = (p1.x + p2.x) / 2;
+    targetY = (playerFeetY(state, "p1") + playerFeetY(state, "p2")) / 2 - PLAYER_HEIGHT * 0.3;
+    targetZoom = 1.0;
+  }
+
+  const cam = state.camera;
+  const ease = Math.min(1, dt * CAMERA_EASE);
+  cam.x += (targetX - cam.x) * ease;
+  cam.y += (targetY - cam.y) * ease;
+  cam.zoom += (targetZoom - cam.zoom) * ease;
+
+  const halfW = WORLD_WIDTH / (2 * cam.zoom);
+  const halfH = WORLD_HEIGHT / (2 * cam.zoom);
+  cam.x = clamp(cam.x, Math.min(halfW, WORLD_WIDTH - halfW), Math.max(halfW, WORLD_WIDTH - halfW));
+  cam.y = clamp(cam.y, Math.min(halfH, WORLD_HEIGHT - halfH), Math.max(halfH, WORLD_HEIGHT - halfH));
 }
 
 function stepProjectile(state: GameState, proj: Projectile, dt: number) {
@@ -355,6 +407,7 @@ function stepProjectile(state: GameState, proj: Projectile, dt: number) {
       if (proj.weapon.splashRadius > 0) {
         spawnBurst(state, proj.x, proj.y, proj.weapon.colorMain, 26, 150);
         state.terrain = deformTerrain(state.terrain, proj.x, proj.weapon.splashRadius * 0.9, 26);
+        state.decorations = state.decorations.filter((d) => Math.abs(d.x - proj.x) > proj.weapon.splashRadius * 0.7);
         applyExplosion(state, proj.x, proj.y, proj.weapon, proj.ownerId);
       } else {
         const shooter = state.players[proj.ownerId];

@@ -169,6 +169,13 @@ export interface MapDef {
   groundBottom: string;
   windRange: number; // max abs wind strength
   roughness: number; // terrain jaggedness 0..1
+  soilColor: string; // mid-layer material band
+  rockColor: string; // deep foundation band
+  mountainFar: string; // distant parallax silhouette
+  mountainNear: string; // closer parallax silhouette
+  cloudColor: string;
+  decoColor: string; // grass/bush accent color
+  accentGlow: string; // sun/moon + rim-light tint
 }
 
 export const MAPS: MapDef[] = [
@@ -181,6 +188,13 @@ export const MAPS: MapDef[] = [
     groundBottom: "#8a5a2b",
     windRange: 9,
     roughness: 0.35,
+    soilColor: "#a9723a",
+    rockColor: "#5c3c1f",
+    mountainFar: "#3a4a7a",
+    mountainNear: "#2c3760",
+    cloudColor: "rgba(255,244,222,0.75)",
+    decoColor: "#8a7239",
+    accentGlow: "#ffe6ad",
   },
   {
     id: "mountains",
@@ -191,6 +205,13 @@ export const MAPS: MapDef[] = [
     groundBottom: "#3c4a37",
     windRange: 4,
     roughness: 0.75,
+    soilColor: "#4c5c46",
+    rockColor: "#2b3427",
+    mountainFar: "#2a3f5c",
+    mountainNear: "#1c2d45",
+    cloudColor: "rgba(232,240,248,0.8)",
+    decoColor: "#3f5a3a",
+    accentGlow: "#dff0ff",
   },
   {
     id: "volcanic",
@@ -201,8 +222,67 @@ export const MAPS: MapDef[] = [
     groundBottom: "#231313",
     windRange: 6,
     roughness: 0.55,
+    soilColor: "#3a2420",
+    rockColor: "#1c1210",
+    mountainFar: "#5c2a2a",
+    mountainNear: "#3a1a1c",
+    cloudColor: "rgba(90,50,40,0.5)",
+    decoColor: "#5c3a28",
+    accentGlow: "#ff8a5c",
   },
 ];
+
+export interface WarriorArchetype {
+  id: string;
+  nameAr: string;
+  build: "bulky" | "lean" | "agile";
+  bodyColor: string;
+  bodyColorDark: string;
+  skinColor: string;
+  accentColor: string;
+  helmet: "horned" | "hood" | "cap";
+  signatureWeapon: string;
+}
+
+export const ARCHETYPES: WarriorArchetype[] = [
+  {
+    id: "axe-warrior",
+    nameAr: "محارب الفأس الشمالي",
+    build: "bulky",
+    bodyColor: "#3f6fb0",
+    bodyColorDark: "#1c3a5c",
+    skinColor: "#e8b98a",
+    accentColor: "#f4d488",
+    helmet: "horned",
+    signatureWeapon: "axe",
+  },
+  {
+    id: "forest-archer",
+    nameAr: "رامي الغابة",
+    build: "lean",
+    bodyColor: "#d95c5c",
+    bodyColorDark: "#6b2323",
+    skinColor: "#e8b98a",
+    accentColor: "#facc15",
+    helmet: "hood",
+    signatureWeapon: "bow",
+  },
+  {
+    id: "shadow-scout",
+    nameAr: "كشّاف الظل",
+    build: "agile",
+    bodyColor: "#6b46c1",
+    bodyColorDark: "#2f1f52",
+    skinColor: "#d9a877",
+    accentColor: "#67e8f9",
+    helmet: "cap",
+    signatureWeapon: "spear",
+  },
+];
+
+export function archetypeById(id: string): WarriorArchetype {
+  return ARCHETYPES.find((a) => a.id === id) ?? ARCHETYPES[0];
+}
 
 export interface StatusEffects {
   burnTurns: number;
@@ -220,6 +300,7 @@ export interface PlayerState {
   facing: 1 | -1;
   color: string;
   colorDark: string;
+  archetype: string;
   ammo: Record<string, number>;
   energy: number;
   cooldowns: Record<string, number>;
@@ -239,7 +320,14 @@ export function freshCooldowns(): Record<string, number> {
   return rec;
 }
 
-export function makePlayer(id: PlayerId, nameAr: string, x: number, facing: 1 | -1, color: string, colorDark: string): PlayerState {
+export function makePlayer(
+  id: PlayerId,
+  nameAr: string,
+  x: number,
+  facing: 1 | -1,
+  archetypeId: string
+): PlayerState {
+  const archetype = archetypeById(archetypeId);
   return {
     id,
     nameAr,
@@ -247,8 +335,9 @@ export function makePlayer(id: PlayerId, nameAr: string, x: number, facing: 1 | 
     hp: 100,
     maxHp: 100,
     facing,
-    color,
-    colorDark,
+    color: archetype.bodyColor,
+    colorDark: archetype.bodyColorDark,
+    archetype: archetype.id,
     ammo: freshAmmo(),
     energy: 2,
     cooldowns: freshCooldowns(),

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Difficulty, MapDef, SKILLS, WEAPONS } from "../game/entities";
+import { Difficulty, MapDef, SKILLS, WEAPONS, archetypeById } from "../game/entities";
 import {
   GameState,
   aiChooseAndFire,
@@ -10,6 +10,7 @@ import {
   selectWeapon,
   update as engineUpdate,
   useSkill,
+  weaponById,
 } from "../game/engine";
 import { draw } from "../game/render";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../game/physics";
@@ -47,6 +48,7 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
 
   const [, setTick] = useState(0);
   const [confirmQuit, setConfirmQuit] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
     audio.setMuted(muted);
@@ -59,16 +61,17 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
   }, []);
 
   useEffect(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
     function resize() {
-      const canvas = canvasRef.current;
-      const container = containerRef.current;
-      if (!canvas || !container) return;
-      const rect = container.getBoundingClientRect();
+      const rect = container!.getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-      canvas.width = Math.round(rect.width * dpr);
-      canvas.height = Math.round(rect.height * dpr);
-      canvas.style.width = rect.width + "px";
-      canvas.style.height = rect.height + "px";
+      canvas!.width = Math.round(rect.width * dpr);
+      canvas!.height = Math.round(rect.height * dpr);
+      canvas!.style.width = rect.width + "px";
+      canvas!.style.height = rect.height + "px";
       const fitScale = Math.min(rect.width / WORLD_WIDTH, rect.height / WORLD_HEIGHT);
       const cssOffsetX = (rect.width - WORLD_WIDTH * fitScale) / 2;
       const cssOffsetY = (rect.height - WORLD_HEIGHT * fitScale) / 2;
@@ -82,10 +85,13 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
       };
     }
     resize();
-    window.addEventListener("resize", resize);
+    // ResizeObserver catches layout changes from the drawer expanding/
+    // collapsing too, not just real window resizes.
+    const ro = new ResizeObserver(resize);
+    ro.observe(container);
     window.addEventListener("orientationchange", resize);
     return () => {
-      window.removeEventListener("resize", resize);
+      ro.disconnect();
       window.removeEventListener("orientationchange", resize);
     };
   }, []);
@@ -98,17 +104,10 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
       lastTsRef.current = ts;
 
       const prevPhase = state.phase;
-      const prevWinner = state.winner;
       engineUpdate(state, dt);
 
-      if (state.projectile && prevPhase === "flying") {
-        // still flying, nothing discrete happened
-      }
       if (prevPhase === "flying" && !state.projectile && state.phase === "resolving") {
         audio.sfxImpact();
-      }
-      if (!prevWinner && state.winner) {
-        // handled after phase settles to gameOver below
       }
       if (state.phase === "gameOver" && !resultRecordedRef.current) {
         resultRecordedRef.current = true;
@@ -158,7 +157,7 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
 
   function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     const state = stateRef.current;
-    if (state.turn !== "p1" || state.phase !== "aiming") return;
+    if (state.turn !== "p1" || state.phase !== "aiming" || drawerOpen) return;
     (e.target as Element).setPointerCapture(e.pointerId);
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     aimRef.current = { active: true, dragX: 0, dragY: 0 };
@@ -188,13 +187,18 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
   const state = stateRef.current;
   const p1 = state.players.p1;
   const p2 = state.players.p2;
+  const p1Archetype = archetypeById(p1.archetype);
+  const p2Archetype = archetypeById(p2.archetype);
   const myTurn = state.turn === "p1" && state.phase === "aiming";
   const selectedWeaponId = state.selectedWeapon.p1;
+  const selectedWeapon = weaponById(selectedWeaponId);
+  const selectedAmmo = p1.ammo[selectedWeaponId];
 
   function handleSelectWeapon(id: string) {
     if (!myTurn) return;
     selectWeapon(state, "p1", id);
     audio.sfxDraw();
+    setDrawerOpen(false);
   }
 
   function handleSkill(id: string) {
@@ -207,14 +211,22 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
     stateRef.current = createGame(map, difficulty);
     resultRecordedRef.current = false;
     aiScheduledRoundRef.current = -1;
+    setDrawerOpen(false);
   }
 
   return (
     <div className="game-root">
+      <div className="rotate-prompt">
+        <span className="rotate-prompt-icon">📱</span>
+        <p>أدر جهازك إلى الوضع الأفقي للعب</p>
+      </div>
       <div className="hud-top">
         <div className={"hud-player p1" + (state.turn === "p1" ? " active" : "")}>
-          <span className="hud-name">{p1.nameAr}</span>
-          <span className="hud-hp">{Math.round(p1.hp)}/{p1.maxHp}</span>
+          <span className="hud-portrait" style={{ background: p1Archetype.bodyColor, borderColor: p1Archetype.accentColor }} />
+          <span className="hud-info">
+            <span className="hud-name">{p1.nameAr}</span>
+            <span className="hud-hp">{Math.round(p1.hp)}/{p1.maxHp}</span>
+          </span>
         </div>
         <div className="hud-center">
           <button className="icon-btn" onClick={() => setConfirmQuit(true)} aria-label="خروج">
@@ -223,8 +235,11 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
           <span className="hud-round">جولة {state.round}</span>
         </div>
         <div className={"hud-player p2" + (state.turn === "p2" ? " active" : "")}>
-          <span className="hud-hp">{Math.round(p2.hp)}/{p2.maxHp}</span>
-          <span className="hud-name">{p2.nameAr}</span>
+          <span className="hud-info">
+            <span className="hud-hp">{Math.round(p2.hp)}/{p2.maxHp}</span>
+            <span className="hud-name">{p2.nameAr}</span>
+          </span>
+          <span className="hud-portrait" style={{ background: p2Archetype.bodyColor, borderColor: p2Archetype.accentColor }} />
         </div>
       </div>
 
@@ -236,49 +251,71 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
         />
-        {myTurn && !aimRef.current.active && (
+        {myTurn && !aimRef.current.active && !drawerOpen && (
           <div className="aim-hint">اسحب في أي مكان لتحديد الزاوية والقوة ثم حرر للإطلاق</div>
         )}
         {!myTurn && state.phase !== "gameOver" && <div className="aim-hint dim">دور الخصم...</div>}
       </div>
 
       <div className="hud-bottom">
-        <div className="weapon-row">
-          {WEAPONS.map((w) => {
-            const ammo = p1.ammo[w.id];
-            const infinite = !Number.isFinite(ammo);
-            const disabled = !infinite && ammo <= 0;
-            return (
-              <button
-                key={w.id}
-                className={"weapon-btn" + (selectedWeaponId === w.id ? " selected" : "") + (disabled ? " disabled" : "")}
-                onClick={() => handleSelectWeapon(w.id)}
-                disabled={!myTurn || disabled}
-                style={{ borderColor: w.colorMain }}
-              >
-                <span className="weapon-dot" style={{ background: w.colorMain }} />
-                <span className="weapon-name">{w.nameAr}</span>
-                <span className="weapon-ammo">{infinite ? "∞" : ammo}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="skill-row">
-          {SKILLS.map((s) => {
-            const cd = p1.cooldowns[s.id];
-            const usable = canUseSkill(state, "p1", s.id);
-            return (
-              <button key={s.id} className={"skill-btn" + (usable ? " ready" : "")} onClick={() => handleSkill(s.id)} disabled={!myTurn || !usable} title={s.descAr}>
-                <span className="skill-name">{s.nameAr}</span>
-                <span className="skill-meta">{cd > 0 ? `⏳${cd}` : `⚡${s.cost}`}</span>
-              </button>
-            );
-          })}
-          <div className="energy-pips">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <span key={i} className={"pip" + (i < p1.energy ? " filled" : "")} />
-            ))}
+        {drawerOpen && (
+          <>
+            <div className="drawer-scrim" onClick={() => setDrawerOpen(false)} />
+            <div className="weapon-row expanded">
+              {WEAPONS.map((w) => {
+                const ammo = p1.ammo[w.id];
+                const infinite = !Number.isFinite(ammo);
+                const disabled = !infinite && ammo <= 0;
+                return (
+                  <button
+                    key={w.id}
+                    className={"weapon-btn" + (selectedWeaponId === w.id ? " selected" : "") + (disabled ? " disabled" : "")}
+                    onClick={() => handleSelectWeapon(w.id)}
+                    disabled={!myTurn || disabled}
+                    style={{ borderColor: w.colorMain }}
+                  >
+                    <span className="weapon-dot" style={{ background: w.colorMain }} />
+                    <span className="weapon-name">{w.nameAr}</span>
+                    <span className="weapon-ammo">{infinite ? "∞" : ammo}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        <div className="drawer-collapsed-row">
+          <button className="weapon-capsule" onClick={() => setDrawerOpen((v) => !v)} disabled={!myTurn}>
+            <span className="weapon-dot" style={{ background: selectedWeapon.colorMain }} />
+            <span className="weapon-name">{selectedWeapon.nameAr}</span>
+            <span className="weapon-ammo">{Number.isFinite(selectedAmmo) ? selectedAmmo : "∞"}</span>
+            <span className={"chevron" + (drawerOpen ? " open" : "")}>‹</span>
+          </button>
+
+          <div className="skill-row">
+            {SKILLS.map((s) => {
+              const cd = p1.cooldowns[s.id];
+              const usable = canUseSkill(state, "p1", s.id);
+              return (
+                <button
+                  key={s.id}
+                  className={"skill-btn" + (usable ? " ready" : "")}
+                  onClick={() => handleSkill(s.id)}
+                  disabled={!myTurn || !usable}
+                  title={s.descAr}
+                >
+                  <span className="skill-name">{s.nameAr}</span>
+                  <span className="skill-meta">{cd > 0 ? `⏳${cd}` : `⚡${s.cost}`}</span>
+                </button>
+              );
+            })}
           </div>
+        </div>
+
+        <div className="energy-pips">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <span key={i} className={"pip" + (i < p1.energy ? " filled" : "")} />
+          ))}
         </div>
       </div>
 

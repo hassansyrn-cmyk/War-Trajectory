@@ -175,29 +175,58 @@ body {
 
 .game-root {
   height: 100%;
-  display: flex;
-  flex-direction: column;
   position: relative;
+  overflow: hidden;
 }
 
 .hud-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: max(10px, env(safe-area-inset-top)) 14px 8px;
-  background: #0e1730;
+  padding: max(8px, env(safe-area-inset-top)) 12px 6px;
+  background: linear-gradient(to bottom, rgba(8, 12, 24, 0.75), rgba(8, 12, 24, 0));
   z-index: 5;
+  pointer-events: none;
+}
+
+.hud-top > * {
+  pointer-events: auto;
 }
 
 .hud-player {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  min-width: 78px;
-  padding: 6px 10px;
+  gap: 8px;
+  min-width: 92px;
+  padding: 5px 9px;
   border-radius: 10px;
   opacity: 0.6;
   transition: opacity 0.2s;
+}
+
+.hud-player.p2 {
+  flex-direction: row-reverse;
+}
+
+.hud-portrait {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  flex: 0 0 auto;
+}
+
+.hud-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.hud-player.p2 .hud-info {
+  align-items: flex-end;
 }
 
 .hud-player.active {
@@ -215,13 +244,13 @@ body {
 }
 
 .hud-name {
-  font-size: 12px;
+  font-size: 11px;
   color: #9aa4b8;
 }
 
 .hud-hp {
   font-weight: 800;
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .hud-center {
@@ -247,9 +276,9 @@ body {
 }
 
 .canvas-wrap {
-  flex: 1;
-  position: relative;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   background: #05070d;
 }
 
@@ -260,7 +289,7 @@ body {
 
 .aim-hint {
   position: absolute;
-  bottom: 10px;
+  bottom: 128px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(10, 14, 24, 0.6);
@@ -270,6 +299,7 @@ body {
   color: #e8edf5;
   pointer-events: none;
   white-space: nowrap;
+  z-index: 4;
 }
 
 .aim-hint.dim {
@@ -277,9 +307,20 @@ body {
 }
 
 .hud-bottom {
-  background: #0e1730;
-  padding: 8px 10px max(10px, env(safe-area-inset-bottom));
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(8, 12, 24, 0.88) 40%, rgba(8, 12, 24, 0));
+  padding: 22px 10px max(8px, env(safe-area-inset-bottom));
   z-index: 5;
+}
+
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.001);
+  z-index: 6;
 }
 
 .weapon-row {
@@ -287,6 +328,23 @@ body {
   gap: 8px;
   overflow-x: auto;
   padding-bottom: 8px;
+  position: relative;
+  z-index: 7;
+}
+
+.weapon-row.expanded {
+  animation: drawer-in 0.16s ease-out;
+}
+
+@keyframes drawer-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .weapon-btn {
@@ -328,14 +386,54 @@ body {
   color: #9aa4b8;
 }
 
-.skill-row {
+.drawer-collapsed-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
+.weapon-capsule {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(244, 212, 136, 0.35);
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: #e8edf5;
+  max-width: 40%;
+}
+
+.weapon-capsule .weapon-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 74px;
+}
+
+.chevron {
+  display: inline-block;
+  font-size: 13px;
+  color: #9aa4b8;
+  transition: transform 0.15s;
+}
+
+.chevron.open {
+  transform: rotate(-90deg);
+}
+
+.skill-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
 .skill-btn {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -343,7 +441,7 @@ body {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 10px;
-  padding: 8px 4px;
+  padding: 7px 3px;
   color: #9aa4b8;
 }
 
@@ -354,17 +452,21 @@ body {
 }
 
 .skill-name {
-  font-size: 11px;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .skill-meta {
-  font-size: 10px;
+  font-size: 9.5px;
 }
 
 .energy-pips {
   display: flex;
   gap: 3px;
-  padding: 0 4px;
+  padding: 6px 4px 0;
 }
 
 .pip {
@@ -379,6 +481,41 @@ body {
 }
 
 /* ---------- Overlays ---------- */
+
+.rotate-prompt {
+  display: none;
+}
+
+@media (orientation: portrait) {
+  .rotate-prompt {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: #0b1220;
+    color: #e8edf5;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    gap: 14px;
+  }
+}
+
+.rotate-prompt-icon {
+  font-size: 44px;
+  animation: rotate-hint 1.6s ease-in-out infinite;
+}
+
+@keyframes rotate-hint {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-90deg);
+  }
+}
 
 .overlay {
   position: absolute;
