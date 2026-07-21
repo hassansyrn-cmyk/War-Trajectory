@@ -1,0 +1,1678 @@
+{
+  "viking": [
+    {
+      "name": "head",
+      "file": "viking/head.png",
+      "size": [
+        145,
+        201
+      ],
+      "source_box": [
+        25,
+        75,
+        195,
+        295
+      ]
+    },
+    {
+      "name": "helmet",
+      "file": "viking/helmet.png",
+      "size": [
+        170,
+        199
+      ],
+      "source_box": [
+        205,
+        75,
+        405,
+        300
+      ]
+    },
+    {
+      "name": "hair_back",
+      "file": "viking/hair_back.png",
+      "size": [
+        118,
+        181
+      ],
+      "source_box": [
+        405,
+        85,
+        590,
+        300
+      ]
+    },
+    {
+      "name": "beard",
+      "file": "viking/beard.png",
+      "size": [
+        108,
+        210
+      ],
+      "source_box": [
+        590,
+        90,
+        760,
+        300
+      ]
+    },
+    {
+      "name": "cape",
+      "file": "viking/cape.png",
+      "size": [
+        355,
+        485
+      ],
+      "source_box": [
+        760,
+        80,
+        1115,
+        565
+      ]
+    },
+    {
+      "name": "axe",
+      "file": "viking/axe.png",
+      "size": [
+        207,
+        505
+      ],
+      "source_box": [
+        1110,
+        95,
+        1320,
+        620
+      ]
+    },
+    {
+      "name": "shield",
+      "file": "viking/shield.png",
+      "size": [
+        229,
+        305
+      ],
+      "source_box": [
+        1300,
+        95,
+        1535,
+        430
+      ]
+    },
+    {
+      "name": "torso_skin",
+      "file": "viking/torso_skin.png",
+      "size": [
+        183,
+        233
+      ],
+      "source_box": [
+        25,
+        300,
+        220,
+        535
+      ]
+    },
+    {
+      "name": "torso_armor",
+      "file": "viking/torso_armor.png",
+      "size": [
+        217,
+        207
+      ],
+      "source_box": [
+        215,
+        300,
+        450,
+        545
+      ]
+    },
+    {
+      "name": "shoulder_left",
+      "file": "viking/shoulder_left.png",
+      "size": [
+        138,
+        181
+      ],
+      "source_box": [
+        445,
+        315,
+        600,
+        515
+      ]
+    },
+    {
+      "name": "shoulder_right",
+      "file": "viking/shoulder_right.png",
+      "size": [
+        170,
+        182
+      ],
+      "source_box": [
+        590,
+        315,
+        760,
+        515
+      ]
+    },
+    {
+      "name": "upper_arm_left",
+      "file": "viking/upper_arm_left.png",
+      "size": [
+        99,
+        167
+      ],
+      "source_box": [
+        25,
+        535,
+        190,
+        745
+      ]
+    },
+    {
+      "name": "forearm_left",
+      "file": "viking/forearm_left.png",
+      "size": [
+        86,
+        175
+      ],
+      "source_box": [
+        170,
+        535,
+        320,
+        745
+      ]
+    },
+    {
+      "name": "hand_left",
+      "file": "viking/hand_left.png",
+      "size": [
+        76,
+        165
+      ],
+      "source_box": [
+        305,
+        535,
+        430,
+        735
+      ]
+    },
+    {
+      "name": "pelvis",
+      "file": "viking/pelvis.png",
+      "size": [
+        165,
+        153
+      ],
+      "source_box": [
+        430,
+        535,
+        720,
+        745
+      ]
+    },
+    {
+      "name": "upper_arm_right",
+      "file": "viking/upper_arm_right.png",
+      "size": [
+        114,
+        197
+      ],
+      "source_box": [
+        720,
+        535,
+        870,
+        745
+      ]
+    },
+    {
+      "name": "forearm_right",
+      "file": "viking/forearm_right.png",
+      "size": [
+        145,
+        201
+      ],
+      "source_box": [
+        850,
+        535,
+        1010,
+        745
+      ]
+    },
+    {
+      "name": "hand_right",
+      "file": "viking/hand_right.png",
+      "size": [
+        68,
+        198
+      ],
+      "source_box": [
+        995,
+        535,
+        1130,
+        735
+      ]
+    },
+    {
+      "name": "upper_leg_left",
+      "file": "viking/upper_leg_left.png",
+      "size": [
+        99,
+        210
+      ],
+      "source_box": [
+        35,
+        735,
+        190,
+        1015
+      ]
+    },
+    {
+      "name": "lower_leg_left",
+      "file": "viking/lower_leg_left.png",
+      "size": [
+        114,
+        230
+      ],
+      "source_box": [
+        185,
+        735,
+        350,
+        1015
+      ]
+    },
+    {
+      "name": "boot_left",
+      "file": "viking/boot_left.png",
+      "size": [
+        146,
+        220
+      ],
+      "source_box": [
+        340,
+        755,
+        500,
+        1015
+      ]
+    },
+    {
+      "name": "upper_leg_right",
+      "file": "viking/upper_leg_right.png",
+      "size": [
+        102,
+        208
+      ],
+      "source_box": [
+        530,
+        735,
+        690,
+        1015
+      ]
+    },
+    {
+      "name": "lower_leg_right",
+      "file": "viking/lower_leg_right.png",
+      "size": [
+        103,
+        229
+      ],
+      "source_box": [
+        690,
+        735,
+        860,
+        1015
+      ]
+    },
+    {
+      "name": "boot_right",
+      "file": "viking/boot_right.png",
+      "size": [
+        175,
+        223
+      ],
+      "source_box": [
+        850,
+        755,
+        1025,
+        1015
+      ]
+    }
+  ],
+  "forest_archer": [
+    {
+      "name": "head",
+      "file": "forest_archer/head.png",
+      "size": [
+        149,
+        184
+      ],
+      "source_box": [
+        35,
+        25,
+        245,
+        225
+      ]
+    },
+    {
+      "name": "hood",
+      "file": "forest_archer/hood.png",
+      "size": [
+        150,
+        186
+      ],
+      "source_box": [
+        245,
+        25,
+        455,
+        230
+      ]
+    },
+    {
+      "name": "hair_back",
+      "file": "forest_archer/hair_back.png",
+      "size": [
+        121,
+        155
+      ],
+      "source_box": [
+        450,
+        25,
+        650,
+        220
+      ]
+    },
+    {
+      "name": "torso_armor",
+      "file": "forest_archer/torso_armor.png",
+      "size": [
+        234,
+        294
+      ],
+      "source_box": [
+        645,
+        30,
+        915,
+        385
+      ]
+    },
+    {
+      "name": "cloak",
+      "file": "forest_archer/cloak.png",
+      "size": [
+        320,
+        540
+      ],
+      "source_box": [
+        900,
+        40,
+        1220,
+        650
+      ]
+    },
+    {
+      "name": "longbow",
+      "file": "forest_archer/longbow.png",
+      "size": [
+        185,
+        792
+      ],
+      "source_box": [
+        1190,
+        70,
+        1375,
+        920
+      ]
+    },
+    {
+      "name": "quiver",
+      "file": "forest_archer/quiver.png",
+      "size": [
+        105,
+        395
+      ],
+      "source_box": [
+        1340,
+        110,
+        1455,
+        560
+      ]
+    },
+    {
+      "name": "arrow",
+      "file": "forest_archer/arrow.png",
+      "size": [
+        40,
+        371
+      ],
+      "source_box": [
+        1430,
+        300,
+        1535,
+        700
+      ]
+    },
+    {
+      "name": "arm_left",
+      "file": "forest_archer/arm_left.png",
+      "size": [
+        171,
+        368
+      ],
+      "source_box": [
+        25,
+        245,
+        220,
+        650
+      ]
+    },
+    {
+      "name": "arm_alt",
+      "file": "forest_archer/arm_alt.png",
+      "size": [
+        205,
+        372
+      ],
+      "source_box": [
+        205,
+        245,
+        410,
+        650
+      ]
+    },
+    {
+      "name": "arm_right",
+      "file": "forest_archer/arm_right.png",
+      "size": [
+        210,
+        377
+      ],
+      "source_box": [
+        400,
+        245,
+        610,
+        650
+      ]
+    },
+    {
+      "name": "pelvis",
+      "file": "forest_archer/pelvis.png",
+      "size": [
+        269,
+        203
+      ],
+      "source_box": [
+        610,
+        380,
+        880,
+        600
+      ]
+    },
+    {
+      "name": "leg_left",
+      "file": "forest_archer/leg_left.png",
+      "size": [
+        181,
+        303
+      ],
+      "source_box": [
+        35,
+        630,
+        220,
+        1005
+      ]
+    },
+    {
+      "name": "leg_alt",
+      "file": "forest_archer/leg_alt.png",
+      "size": [
+        150,
+        297
+      ],
+      "source_box": [
+        215,
+        630,
+        390,
+        1005
+      ]
+    },
+    {
+      "name": "leg_alt2",
+      "file": "forest_archer/leg_alt2.png",
+      "size": [
+        128,
+        332
+      ],
+      "source_box": [
+        385,
+        630,
+        555,
+        1005
+      ]
+    },
+    {
+      "name": "leg_right",
+      "file": "forest_archer/leg_right.png",
+      "size": [
+        153,
+        323
+      ],
+      "source_box": [
+        600,
+        620,
+        770,
+        1005
+      ]
+    },
+    {
+      "name": "leg_right_alt",
+      "file": "forest_archer/leg_right_alt.png",
+      "size": [
+        128,
+        344
+      ],
+      "source_box": [
+        760,
+        620,
+        930,
+        1005
+      ]
+    }
+  ],
+  "shadow_ninja": [
+    {
+      "name": "masked_head",
+      "file": "shadow_ninja/masked_head.png",
+      "size": [
+        157,
+        190
+      ],
+      "source_box": [
+        45,
+        20,
+        270,
+        225
+      ]
+    },
+    {
+      "name": "hood",
+      "file": "shadow_ninja/hood.png",
+      "size": [
+        153,
+        188
+      ],
+      "source_box": [
+        270,
+        20,
+        505,
+        225
+      ]
+    },
+    {
+      "name": "neck_scarf",
+      "file": "shadow_ninja/neck_scarf.png",
+      "size": [
+        189,
+        104
+      ],
+      "source_box": [
+        500,
+        65,
+        735,
+        225
+      ]
+    },
+    {
+      "name": "scarf_long",
+      "file": "shadow_ninja/scarf_long.png",
+      "size": [
+        451,
+        147
+      ],
+      "source_box": [
+        730,
+        40,
+        1210,
+        235
+      ]
+    },
+    {
+      "name": "scarf_short",
+      "file": "shadow_ninja/scarf_short.png",
+      "size": [
+        196,
+        125
+      ],
+      "source_box": [
+        1190,
+        45,
+        1430,
+        225
+      ]
+    },
+    {
+      "name": "torso",
+      "file": "shadow_ninja/torso.png",
+      "size": [
+        198,
+        222
+      ],
+      "source_box": [
+        55,
+        230,
+        320,
+        480
+      ]
+    },
+    {
+      "name": "chest_clothing",
+      "file": "shadow_ninja/chest_clothing.png",
+      "size": [
+        175,
+        212
+      ],
+      "source_box": [
+        315,
+        230,
+        535,
+        480
+      ]
+    },
+    {
+      "name": "belt_sash",
+      "file": "shadow_ninja/belt_sash.png",
+      "size": [
+        175,
+        137
+      ],
+      "source_box": [
+        530,
+        280,
+        760,
+        480
+      ]
+    },
+    {
+      "name": "pelvis",
+      "file": "shadow_ninja/pelvis.png",
+      "size": [
+        203,
+        168
+      ],
+      "source_box": [
+        755,
+        275,
+        985,
+        490
+      ]
+    },
+    {
+      "name": "belt_guard",
+      "file": "shadow_ninja/belt_guard.png",
+      "size": [
+        156,
+        165
+      ],
+      "source_box": [
+        975,
+        285,
+        1210,
+        490
+      ]
+    },
+    {
+      "name": "katana",
+      "file": "shadow_ninja/katana.png",
+      "size": [
+        112,
+        659
+      ],
+      "source_box": [
+        1260,
+        225,
+        1390,
+        930
+      ]
+    },
+    {
+      "name": "sheath",
+      "file": "shadow_ninja/sheath.png",
+      "size": [
+        118,
+        552
+      ],
+      "source_box": [
+        1370,
+        300,
+        1515,
+        930
+      ]
+    },
+    {
+      "name": "upper_arm_left",
+      "file": "shadow_ninja/upper_arm_left.png",
+      "size": [
+        88,
+        204
+      ],
+      "source_box": [
+        55,
+        485,
+        210,
+        720
+      ]
+    },
+    {
+      "name": "upper_arm_left_alt",
+      "file": "shadow_ninja/upper_arm_left_alt.png",
+      "size": [
+        82,
+        193
+      ],
+      "source_box": [
+        205,
+        485,
+        355,
+        720
+      ]
+    },
+    {
+      "name": "forearm_left",
+      "file": "shadow_ninja/forearm_left.png",
+      "size": [
+        94,
+        197
+      ],
+      "source_box": [
+        350,
+        485,
+        500,
+        720
+      ]
+    },
+    {
+      "name": "forearm_left_alt",
+      "file": "shadow_ninja/forearm_left_alt.png",
+      "size": [
+        91,
+        200
+      ],
+      "source_box": [
+        495,
+        485,
+        640,
+        720
+      ]
+    },
+    {
+      "name": "upper_arm_right",
+      "file": "shadow_ninja/upper_arm_right.png",
+      "size": [
+        81,
+        186
+      ],
+      "source_box": [
+        635,
+        485,
+        790,
+        720
+      ]
+    },
+    {
+      "name": "forearm_right",
+      "file": "shadow_ninja/forearm_right.png",
+      "size": [
+        114,
+        194
+      ],
+      "source_box": [
+        785,
+        485,
+        935,
+        720
+      ]
+    },
+    {
+      "name": "hand_right",
+      "file": "shadow_ninja/hand_right.png",
+      "size": [
+        135,
+        186
+      ],
+      "source_box": [
+        925,
+        500,
+        1060,
+        720
+      ]
+    },
+    {
+      "name": "leg_left",
+      "file": "shadow_ninja/leg_left.png",
+      "size": [
+        94,
+        240
+      ],
+      "source_box": [
+        50,
+        725,
+        215,
+        1015
+      ]
+    },
+    {
+      "name": "leg_left_alt",
+      "file": "shadow_ninja/leg_left_alt.png",
+      "size": [
+        127,
+        229
+      ],
+      "source_box": [
+        205,
+        725,
+        365,
+        1015
+      ]
+    },
+    {
+      "name": "lower_leg_left",
+      "file": "shadow_ninja/lower_leg_left.png",
+      "size": [
+        156,
+        225
+      ],
+      "source_box": [
+        360,
+        725,
+        520,
+        1015
+      ]
+    },
+    {
+      "name": "lower_leg_left_alt",
+      "file": "shadow_ninja/lower_leg_left_alt.png",
+      "size": [
+        165,
+        222
+      ],
+      "source_box": [
+        510,
+        725,
+        675,
+        1015
+      ]
+    },
+    {
+      "name": "leg_right",
+      "file": "shadow_ninja/leg_right.png",
+      "size": [
+        160,
+        232
+      ],
+      "source_box": [
+        665,
+        725,
+        825,
+        1015
+      ]
+    },
+    {
+      "name": "lower_leg_right",
+      "file": "shadow_ninja/lower_leg_right.png",
+      "size": [
+        175,
+        229
+      ],
+      "source_box": [
+        815,
+        725,
+        990,
+        1015
+      ]
+    },
+    {
+      "name": "throwing_star",
+      "file": "shadow_ninja/throwing_star.png",
+      "size": [
+        121,
+        125
+      ],
+      "source_box": [
+        1040,
+        745,
+        1205,
+        930
+      ]
+    }
+  ],
+  "spear_knight": [
+    {
+      "name": "head",
+      "file": "spear_knight/head.png",
+      "size": [
+        142,
+        187
+      ],
+      "source_box": [
+        55,
+        20,
+        285,
+        225
+      ]
+    },
+    {
+      "name": "helmet",
+      "file": "spear_knight/helmet.png",
+      "size": [
+        133,
+        162
+      ],
+      "source_box": [
+        285,
+        20,
+        485,
+        220
+      ]
+    },
+    {
+      "name": "helmet_plume",
+      "file": "spear_knight/helmet_plume.png",
+      "size": [
+        123,
+        199
+      ],
+      "source_box": [
+        475,
+        20,
+        645,
+        230
+      ]
+    },
+    {
+      "name": "upper_arm_left",
+      "file": "spear_knight/upper_arm_left.png",
+      "size": [
+        113,
+        196
+      ],
+      "source_box": [
+        650,
+        15,
+        800,
+        235
+      ]
+    },
+    {
+      "name": "upper_arm_alt",
+      "file": "spear_knight/upper_arm_alt.png",
+      "size": [
+        114,
+        196
+      ],
+      "source_box": [
+        800,
+        15,
+        945,
+        235
+      ]
+    },
+    {
+      "name": "upper_arm_right",
+      "file": "spear_knight/upper_arm_right.png",
+      "size": [
+        128,
+        196
+      ],
+      "source_box": [
+        930,
+        15,
+        1085,
+        235
+      ]
+    },
+    {
+      "name": "cape",
+      "file": "spear_knight/cape.png",
+      "size": [
+        325,
+        458
+      ],
+      "source_box": [
+        1065,
+        20,
+        1425,
+        500
+      ]
+    },
+    {
+      "name": "torso_cloth",
+      "file": "spear_knight/torso_cloth.png",
+      "size": [
+        197,
+        212
+      ],
+      "source_box": [
+        55,
+        230,
+        285,
+        460
+      ]
+    },
+    {
+      "name": "chest_armor",
+      "file": "spear_knight/chest_armor.png",
+      "size": [
+        230,
+        232
+      ],
+      "source_box": [
+        270,
+        225,
+        500,
+        470
+      ]
+    },
+    {
+      "name": "torso_back_armor",
+      "file": "spear_knight/torso_back_armor.png",
+      "size": [
+        195,
+        221
+      ],
+      "source_box": [
+        480,
+        220,
+        675,
+        455
+      ]
+    },
+    {
+      "name": "forearm_left",
+      "file": "spear_knight/forearm_left.png",
+      "size": [
+        126,
+        209
+      ],
+      "source_box": [
+        650,
+        210,
+        790,
+        430
+      ]
+    },
+    {
+      "name": "armored_hand_left",
+      "file": "spear_knight/armored_hand_left.png",
+      "size": [
+        140,
+        198
+      ],
+      "source_box": [
+        790,
+        210,
+        930,
+        430
+      ]
+    },
+    {
+      "name": "forearm_right",
+      "file": "spear_knight/forearm_right.png",
+      "size": [
+        121,
+        208
+      ],
+      "source_box": [
+        915,
+        205,
+        1065,
+        430
+      ]
+    },
+    {
+      "name": "pelvis_armor",
+      "file": "spear_knight/pelvis_armor.png",
+      "size": [
+        270,
+        194
+      ],
+      "source_box": [
+        350,
+        440,
+        620,
+        650
+      ]
+    },
+    {
+      "name": "pelvis_side",
+      "file": "spear_knight/pelvis_side.png",
+      "size": [
+        150,
+        181
+      ],
+      "source_box": [
+        570,
+        440,
+        720,
+        650
+      ]
+    },
+    {
+      "name": "hand_left",
+      "file": "spear_knight/hand_left.png",
+      "size": [
+        85,
+        165
+      ],
+      "source_box": [
+        700,
+        430,
+        815,
+        620
+      ]
+    },
+    {
+      "name": "hand_center",
+      "file": "spear_knight/hand_center.png",
+      "size": [
+        73,
+        158
+      ],
+      "source_box": [
+        810,
+        430,
+        925,
+        620
+      ]
+    },
+    {
+      "name": "hand_right",
+      "file": "spear_knight/hand_right.png",
+      "size": [
+        82,
+        167
+      ],
+      "source_box": [
+        915,
+        430,
+        1035,
+        620
+      ]
+    },
+    {
+      "name": "upper_leg_left",
+      "file": "spear_knight/upper_leg_left.png",
+      "size": [
+        133,
+        333
+      ],
+      "source_box": [
+        55,
+        625,
+        225,
+        1015
+      ]
+    },
+    {
+      "name": "lower_leg_left",
+      "file": "spear_knight/lower_leg_left.png",
+      "size": [
+        104,
+        340
+      ],
+      "source_box": [
+        215,
+        625,
+        390,
+        1015
+      ]
+    },
+    {
+      "name": "leg_center",
+      "file": "spear_knight/leg_center.png",
+      "size": [
+        175,
+        349
+      ],
+      "source_box": [
+        380,
+        625,
+        555,
+        1015
+      ]
+    },
+    {
+      "name": "leg_center_right",
+      "file": "spear_knight/leg_center_right.png",
+      "size": [
+        160,
+        358
+      ],
+      "source_box": [
+        545,
+        625,
+        710,
+        1015
+      ]
+    },
+    {
+      "name": "leg_right",
+      "file": "spear_knight/leg_right.png",
+      "size": [
+        164,
+        335
+      ],
+      "source_box": [
+        700,
+        625,
+        875,
+        1015
+      ]
+    },
+    {
+      "name": "spear",
+      "file": "spear_knight/spear.png",
+      "size": [
+        117,
+        454
+      ],
+      "source_box": [
+        1000,
+        500,
+        1145,
+        1015
+      ]
+    },
+    {
+      "name": "shield",
+      "file": "spear_knight/shield.png",
+      "size": [
+        268,
+        470
+      ],
+      "source_box": [
+        1120,
+        485,
+        1515,
+        1015
+      ]
+    }
+  ],
+  "mortar_engineer": [
+    {
+      "name": "head",
+      "file": "mortar_engineer/head.png",
+      "size": [
+        132,
+        166
+      ],
+      "source_box": [
+        55,
+        15,
+        260,
+        200
+      ]
+    },
+    {
+      "name": "goggles",
+      "file": "mortar_engineer/goggles.png",
+      "size": [
+        157,
+        80
+      ],
+      "source_box": [
+        255,
+        30,
+        455,
+        150
+      ]
+    },
+    {
+      "name": "mustache",
+      "file": "mortar_engineer/mustache.png",
+      "size": [
+        105,
+        39
+      ],
+      "source_box": [
+        280,
+        135,
+        430,
+        215
+      ]
+    },
+    {
+      "name": "hat",
+      "file": "mortar_engineer/hat.png",
+      "size": [
+        203,
+        121
+      ],
+      "source_box": [
+        430,
+        25,
+        650,
+        180
+      ]
+    },
+    {
+      "name": "backpack",
+      "file": "mortar_engineer/backpack.png",
+      "size": [
+        198,
+        246
+      ],
+      "source_box": [
+        30,
+        205,
+        250,
+        465
+      ]
+    },
+    {
+      "name": "torso",
+      "file": "mortar_engineer/torso.png",
+      "size": [
+        229,
+        219
+      ],
+      "source_box": [
+        245,
+        200,
+        475,
+        440
+      ]
+    },
+    {
+      "name": "utility_vest",
+      "file": "mortar_engineer/utility_vest.png",
+      "size": [
+        202,
+        237
+      ],
+      "source_box": [
+        455,
+        195,
+        680,
+        445
+      ]
+    },
+    {
+      "name": "upper_arm_left",
+      "file": "mortar_engineer/upper_arm_left.png",
+      "size": [
+        110,
+        345
+      ],
+      "source_box": [
+        680,
+        180,
+        815,
+        545
+      ]
+    },
+    {
+      "name": "forearm_left",
+      "file": "mortar_engineer/forearm_left.png",
+      "size": [
+        140,
+        343
+      ],
+      "source_box": [
+        800,
+        180,
+        940,
+        545
+      ]
+    },
+    {
+      "name": "arm_right",
+      "file": "mortar_engineer/arm_right.png",
+      "size": [
+        143,
+        347
+      ],
+      "source_box": [
+        925,
+        180,
+        1070,
+        545
+      ]
+    },
+    {
+      "name": "handheld_launcher",
+      "file": "mortar_engineer/handheld_launcher.png",
+      "size": [
+        200,
+        294
+      ],
+      "source_box": [
+        1070,
+        170,
+        1285,
+        490
+      ]
+    },
+    {
+      "name": "mortar_tube",
+      "file": "mortar_engineer/mortar_tube.png",
+      "size": [
+        390,
+        515
+      ],
+      "source_box": [
+        1060,
+        345,
+        1450,
+        860
+      ]
+    },
+    {
+      "name": "mortar_shell",
+      "file": "mortar_engineer/mortar_shell.png",
+      "size": [
+        100,
+        294
+      ],
+      "source_box": [
+        1410,
+        520,
+        1535,
+        850
+      ]
+    },
+    {
+      "name": "belt",
+      "file": "mortar_engineer/belt.png",
+      "size": [
+        189,
+        130
+      ],
+      "source_box": [
+        255,
+        430,
+        455,
+        570
+      ]
+    },
+    {
+      "name": "pelvis",
+      "file": "mortar_engineer/pelvis.png",
+      "size": [
+        217,
+        147
+      ],
+      "source_box": [
+        455,
+        420,
+        690,
+        570
+      ]
+    },
+    {
+      "name": "tool_pouch",
+      "file": "mortar_engineer/tool_pouch.png",
+      "size": [
+        123,
+        165
+      ],
+      "source_box": [
+        920,
+        540,
+        1060,
+        740
+      ]
+    },
+    {
+      "name": "leg_left",
+      "file": "mortar_engineer/leg_left.png",
+      "size": [
+        170,
+        425
+      ],
+      "source_box": [
+        45,
+        515,
+        230,
+        950
+      ]
+    },
+    {
+      "name": "leg_left_alt",
+      "file": "mortar_engineer/leg_left_alt.png",
+      "size": [
+        180,
+        420
+      ],
+      "source_box": [
+        210,
+        515,
+        390,
+        950
+      ]
+    },
+    {
+      "name": "leg_center",
+      "file": "mortar_engineer/leg_center.png",
+      "size": [
+        170,
+        416
+      ],
+      "source_box": [
+        370,
+        515,
+        540,
+        950
+      ]
+    },
+    {
+      "name": "upper_leg_right",
+      "file": "mortar_engineer/upper_leg_right.png",
+      "size": [
+        137,
+        210
+      ],
+      "source_box": [
+        470,
+        540,
+        625,
+        750
+      ]
+    },
+    {
+      "name": "upper_leg_right_alt",
+      "file": "mortar_engineer/upper_leg_right_alt.png",
+      "size": [
+        150,
+        210
+      ],
+      "source_box": [
+        600,
+        540,
+        750,
+        750
+      ]
+    },
+    {
+      "name": "lower_leg_right",
+      "file": "mortar_engineer/lower_leg_right.png",
+      "size": [
+        148,
+        192
+      ],
+      "source_box": [
+        720,
+        540,
+        875,
+        750
+      ]
+    },
+    {
+      "name": "lower_leg_alt",
+      "file": "mortar_engineer/lower_leg_alt.png",
+      "size": [
+        150,
+        173
+      ],
+      "source_box": [
+        850,
+        540,
+        1000,
+        750
+      ]
+    },
+    {
+      "name": "boot_left",
+      "file": "mortar_engineer/boot_left.png",
+      "size": [
+        150,
+        190
+      ],
+      "source_box": [
+        450,
+        735,
+        600,
+        970
+      ]
+    },
+    {
+      "name": "boot_center",
+      "file": "mortar_engineer/boot_center.png",
+      "size": [
+        150,
+        190
+      ],
+      "source_box": [
+        590,
+        735,
+        740,
+        970
+      ]
+    },
+    {
+      "name": "boot_right",
+      "file": "mortar_engineer/boot_right.png",
+      "size": [
+        125,
+        178
+      ],
+      "source_box": [
+        720,
+        735,
+        870,
+        970
+      ]
+    },
+    {
+      "name": "mortar_base",
+      "file": "mortar_engineer/mortar_base.png",
+      "size": [
+        305,
+        125
+      ],
+      "source_box": [
+        900,
+        820,
+        1225,
+        1010
+      ]
+    }
+  ]
+}
