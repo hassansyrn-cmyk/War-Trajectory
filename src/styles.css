@@ -213,10 +213,12 @@ body {
 }
 
 .hud-portrait {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.3);
+  background-color: #1c2740;
+  background-repeat: no-repeat;
   flex: 0 0 auto;
 }
 
@@ -370,10 +372,20 @@ body {
   opacity: 0.35;
 }
 
-.weapon-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+.weapon-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  flex: 0 0 auto;
+}
+
+.weapon-icon.small {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
 }
 
 .weapon-name {
@@ -541,6 +553,22 @@ body {
 .overlay-card h2 {
   margin: 0 0 8px;
   font-size: 20px;
+}
+
+.loading-spinner {
+  width: 34px;
+  height: 34px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  border: 3px solid rgba(244, 212, 136, 0.25);
+  border-top-color: #f4d488;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .overlay-card p {

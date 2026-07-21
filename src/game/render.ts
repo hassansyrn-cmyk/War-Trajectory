@@ -1,13 +1,18 @@
-import { PlayerId, PlayerState, WeaponDef, archetypeById } from "./entities";
-import { Camera, GameState, MAX_DRAG, MAX_LAUNCH_SPEED, PLAYER_HEIGHT, PLAYER_WIDTH, playerFeetY, weaponById, opponentOf } from "./engine";
+import { PlayerId, WeaponDef, archetypeById } from "./entities";
+import { Camera, GameState, MAX_DRAG, MAX_LAUNCH_SPEED, PLAYER_HEIGHT, PLAYER_WIDTH, playerFeetY, weaponById } from "./engine";
 import { TERRAIN_SAMPLES, WORLD_HEIGHT, WORLD_WIDTH, clamp, simulateTrajectory } from "./physics";
-import { assets } from "./assets";
+import { getManifest, getTerrainSprite, getWarriorSheet, getWeaponIcon } from "./assets";
 
 export interface AimState {
   active: boolean;
   dragX: number;
   dragY: number;
 }
+
+// Visual (not gameplay-hitbox) size of a drawn warrior — independent from
+// PLAYER_HEIGHT/PLAYER_WIDTH, which stay purely for collision math.
+const SPRITE_DRAW_SIZE = 108;
+const WEAPON_ICON_SIZE = 30;
 
 let frameClock = 0;
 
@@ -27,11 +32,11 @@ export function draw(ctx: CanvasRenderingContext2D, state: GameState, aim: AimSt
   drawDecorations(ctx, state);
 
   const activePlayer = state.players[state.turn];
-  drawPlayer(ctx, state, "p1", aim);
-  drawPlayer(ctx, state, "p2", aim);
+  drawPlayer(ctx, state, "p1");
+  drawPlayer(ctx, state, "p2");
 
   if (aim.active && state.phase === "aiming") {
-    drawAimGuide(ctx, state, activePlayer, aim);
+    drawAimGuide(ctx, state, activePlayer.id, aim);
   }
 
   if (state.projectile) drawProjectile(ctx, state);
@@ -128,40 +133,52 @@ function drawMountainLayer(ctx: CanvasRenderingContext2D, color: string, baseY: 
   ctx.restore();
 }
 
-function getTerrainSpriteImg(mapId: string): HTMLImageElement | null {
-  if (mapId === "desert") return assets.terrain.desert;
-  if (mapId === "mountains") return assets.terrain.grass;
-  if (mapId === "volcanic") return assets.terrain.volcanic;
-  return null;
+// ---------- Terrain (sprite-textured, falls back to flat-color bands) ----------
+
+function terrainPoints(state: GameState) {
+  const pts: { x: number; y: number }[] = [];
+  for (let i = 0; i < TERRAIN_SAMPLES; i++) {
+    pts.push({ x: (i / (TERRAIN_SAMPLES - 1)) * WORLD_WIDTH, y: state.terrain[i] });
+  }
+  return pts;
+}
+
+function clipToTerrainSilhouette(ctx: CanvasRenderingContext2D, pts: { x: number; y: number }[]) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, WORLD_HEIGHT + 4);
+  for (const p of pts) ctx.lineTo(p.x, p.y);
+  ctx.lineTo(pts[pts.length - 1].x, WORLD_HEIGHT + 4);
+  ctx.closePath();
+  ctx.clip();
 }
 
 function drawTerrain(ctx: CanvasRenderingContext2D, state: GameState) {
-  const terrain = state.terrain;
-  const pts: { x: number; y: number }[] = [];
-  for (let i = 0; i < TERRAIN_SAMPLES; i++) {
-    pts.push({ x: (i / (TERRAIN_SAMPLES - 1)) * WORLD_WIDTH, y: terrain[i] });
-  }
+  const pts = terrainPoints(state);
+  const sprite = getTerrainSprite(state.map.terrainSprite);
 
-  const img = getTerrainSpriteImg(state.map.id);
+  ctx.save();
+  clipToTerrainSilhouette(ctx, pts);
 
-  if (img) {
-    // Generate pattern
-    const pattern = ctx.createPattern(img, "repeat");
-    if (pattern) {
-      fillTerrainBand(ctx, pts, WORLD_HEIGHT + 4, pattern, 0);
-    } else {
-      fillTerrainBand(ctx, pts, WORLD_HEIGHT + 4, state.map.soilColor, 0);
-    }
+  if (sprite) {
+    // Fallback fill first in case the source art's aspect ratio leaves any
+    // gap once stretched, then the real artwork stretched across the whole
+    // deformable silhouette's bounding box. As craters dig down, the clip
+    // region follows the live terrain curve, naturally revealing the
+    // lower/rockier part of the source art at that spot.
+    ctx.fillStyle = state.map.rockColor;
+    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT + 4);
+    const topY = Math.min(...state.terrain) - 24;
+    const bottomY = WORLD_HEIGHT + 24;
+    ctx.drawImage(sprite, 0, 0, sprite.width, sprite.height, 0, topY, WORLD_WIDTH, bottomY - topY);
   } else {
     fillTerrainBand(ctx, pts, WORLD_HEIGHT + 4, state.map.rockColor, 0);
     fillTerrainBand(ctx, pts, WORLD_HEIGHT + 4, state.map.soilColor, 16);
+    const g = ctx.createLinearGradient(0, WORLD_HEIGHT * 0.4, 0, WORLD_HEIGHT * 0.4 + 30);
+    g.addColorStop(0, state.map.groundTop);
+    g.addColorStop(1, state.map.groundBottom);
+    fillTerrainBand(ctx, pts, WORLD_HEIGHT + 4, g, 0, 10);
   }
-
-  // Draw top dynamic terrain boundary surface
-  const g = ctx.createLinearGradient(0, WORLD_HEIGHT * 0.4, 0, WORLD_HEIGHT * 0.4 + 30);
-  g.addColorStop(0, state.map.groundTop);
-  g.addColorStop(1, state.map.groundBottom);
-  fillTerrainBand(ctx, pts, WORLD_HEIGHT + 4, g, 0, 10);
+  ctx.restore();
 
   ctx.beginPath();
   pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
@@ -179,7 +196,7 @@ function fillTerrainBand(
   ctx: CanvasRenderingContext2D,
   pts: { x: number; y: number }[],
   bottomY: number,
-  fill: string | CanvasGradient | CanvasPattern,
+  fill: string | CanvasGradient,
   yOffset: number,
   onlyTopThickness = 0
 ) {
@@ -277,143 +294,55 @@ function drawWindIndicator(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.restore();
 }
 
-function getWarriorSpriteImg(archetypeId: string): HTMLImageElement | null {
-  if (archetypeId === "axe-warrior") return assets.warriors.viking;
-  if (archetypeId === "forest-archer") return assets.warriors.archer;
-  if (archetypeId === "shadow-scout") return assets.warriors.ninja;
-  if (archetypeId === "knight-warrior") return assets.warriors.knight;
-  if (archetypeId === "engineer-warrior") return assets.warriors.engineer;
-  return null;
-}
+// ---------- Warriors (sprite sheet: Idle | Attack | Defeated) ----------
 
-function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState, id: PlayerId, aim: AimState) {
+function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState, id: PlayerId) {
   const player = state.players[id];
   const archetype = archetypeById(player.archetype);
   const feetY = playerFeetY(state, id);
   const isActive = state.turn === id && state.phase !== "gameOver";
 
-  const img = getWarriorSpriteImg(player.archetype);
-
-  // Determine facing towards opponent
-  const opponent = state.players[opponentOf(id)];
-  const facingDir = opponent.x > player.x ? 1 : -1;
-
-  // Visual size logic: width & height
-  const drawW = 68;
-  const drawH = 68;
-
-  // Bobbing animation for active player to keep it alive
-  let bobY = 0;
-  if (isActive && state.phase === "aiming") {
-    bobY = Math.sin(frameClock * 7) * 2;
-  }
-
-  // Pre-calculate sizing for consistency (shields, status, health bars, fallback drawing)
-  const buildWidthMul = archetype.build === "bulky" ? 1.18 : archetype.build === "agile" ? 0.86 : 1;
-  const w = PLAYER_WIDTH * buildWidthMul;
-  const h = PLAYER_HEIGHT * (archetype.build === "bulky" ? 0.96 : 1.04);
-  const bodyTop = feetY - h + bobY;
-
-  ctx.save();
-
-  // Shadow drawing
+  // Ground shadow
   ctx.save();
   ctx.globalAlpha = 0.35;
   ctx.fillStyle = "#000000";
   ctx.beginPath();
-  ctx.ellipse(player.x, feetY + 2, drawW * 0.42, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(player.x, feetY + 2, SPRITE_DRAW_SIZE * 0.28, 5, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
+  const sheet = getWarriorSheet(player.archetype);
+  const manifest = getManifest();
+  const frameSize = manifest?.warriorFrameSize ?? 256;
+  const frameIndex = player.hp <= 0 ? 2 : state.elapsed < player.attackPoseUntil ? 1 : 0;
+
+  ctx.save();
   if (isActive) {
-    ctx.shadowColor = player.color;
-    ctx.shadowBlur = 20;
+    ctx.shadowColor = archetype.accentColor;
+    ctx.shadowBlur = 18;
   }
+  ctx.translate(player.x, feetY + 2);
+  if (player.facing === -1) ctx.scale(-1, 1);
 
-  if (img) {
-    // Determine Sprite Sheet Frame
-    // Frame 0: idle, Frame 1: attack, Frame 2: defeated
-    let frameIdx = 0;
-    if (player.hp <= 0) {
-      frameIdx = 2;
-    } else if (player.attackTimer !== undefined && player.attackTimer > 0) {
-      frameIdx = 1;
-    }
-
-    // Source coordinates on the 768x256 image sheet
-    const sWidth = 256;
-    const sHeight = 256;
-    const sx = frameIdx * sWidth;
-    const sy = 0;
-
-    ctx.save();
-    ctx.translate(player.x, feetY - drawH / 2 + bobY);
-    ctx.scale(facingDir, 1);
+  if (sheet) {
     ctx.drawImage(
-      img,
-      sx, sy, sWidth, sHeight,
-      -drawW / 2, -drawH / 2, drawW, drawH
+      sheet,
+      frameIndex * frameSize,
+      0,
+      frameSize,
+      frameSize,
+      -SPRITE_DRAW_SIZE / 2,
+      -SPRITE_DRAW_SIZE,
+      SPRITE_DRAW_SIZE,
+      SPRITE_DRAW_SIZE
     );
-    ctx.restore();
   } else {
-    // Fallback vector drawing if image failed to load or in node tests
-    ctx.fillStyle = archetype.bodyColorDark;
-    roundRect(ctx, player.x - w * 0.32 + facingDir * 2, feetY - h * 0.34 + bobY, w * 0.24, h * 0.34, 4);
-    ctx.fill();
-
-    ctx.strokeStyle = archetype.bodyColorDark;
-    ctx.lineWidth = w * 0.22;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(player.x - facingDir * w * 0.18, bodyTop + h * 0.46);
-    ctx.lineTo(player.x - facingDir * w * 0.55, bodyTop + h * 0.66);
-    ctx.stroke();
-
-    ctx.fillStyle = archetype.bodyColor;
-    roundRect(ctx, player.x - w / 2, bodyTop + h * 0.3, w, h * 0.52, w * 0.22);
-    ctx.fill();
+    // Fallback silhouette so the match stays playable even if a sprite
+    // failed to load (missing file, bad path, offline first load, etc.).
     ctx.fillStyle = archetype.accentColor;
-    ctx.globalAlpha = 0.85;
-    roundRect(ctx, player.x - w * 0.09, bodyTop + h * 0.34, w * 0.18, h * 0.4, w * 0.06);
+    roundRect(ctx, -PLAYER_WIDTH / 2, -PLAYER_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH * 0.3);
     ctx.fill();
-    ctx.globalAlpha = 1;
-
-    ctx.fillStyle = archetype.bodyColorDark;
-    roundRect(ctx, player.x + w * 0.08 - facingDir * 2, feetY - h * 0.36 + bobY, w * 0.26, h * 0.36, 4);
-    ctx.fill();
-
-    const headCY = bodyTop + h * 0.16;
-    const headR = h * 0.155;
-    ctx.beginPath();
-    ctx.arc(player.x, headCY, headR, 0, Math.PI * 2);
-    ctx.fillStyle = archetype.skinColor;
-    ctx.fill();
-
-    drawHelmet(ctx, archetype.helmet, player.x, headCY, headR, archetype.bodyColorDark, archetype.accentColor);
   }
-
-  // Draw currently held weapon in hand (Only if not in attack frame, and player is still alive)
-  const isAttacking = (player.attackTimer !== undefined && player.attackTimer > 0);
-  if (player.hp > 0 && !isAttacking) {
-    const weapon = weaponById(state.selectedWeapon[id]);
-    const isAiming = isActive && state.phase === "aiming" && aim.active;
-    let armAngle = -0.35 * facingDir;
-    if (isAiming) {
-      armAngle = Math.atan2(aim.dragY, aim.dragX * facingDir) * 0.4 - 0.15 * facingDir;
-    }
-    const shoulderX = player.x + facingDir * 8;
-    const shoulderY = feetY - drawH * 0.46 + bobY;
-    const handX = shoulderX + Math.cos(armAngle) * 14 * facingDir;
-    const handY = shoulderY + Math.sin(armAngle) * 14;
-
-    ctx.save();
-    ctx.translate(handX, handY);
-    const weaponAngle = facingDir > 0 ? -0.5 : Math.PI + 0.5;
-    ctx.rotate(weaponAngle);
-    drawWeaponGlyph(ctx, weapon.type, 1.15, weapon.colorMain, "#e8edf5");
-    ctx.restore();
-  }
-
   ctx.restore();
 
   if (player.status.shieldActive) {
@@ -422,7 +351,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState, id: PlayerI
     ctx.lineWidth = 2.5;
     ctx.setLineDash([5, 4]);
     ctx.beginPath();
-    ctx.arc(player.x, (bodyTop + feetY) / 2, h * 0.68, 0, Math.PI * 2);
+    ctx.arc(player.x, feetY - SPRITE_DRAW_SIZE * 0.5, SPRITE_DRAW_SIZE * 0.58, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
@@ -430,20 +359,20 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState, id: PlayerI
     ctx.save();
     ctx.font = "13px Arial";
     ctx.textAlign = "center";
-    ctx.fillText("🔥", player.x + w * 0.7, bodyTop - 6);
+    ctx.fillText("🔥", player.x + SPRITE_DRAW_SIZE * 0.34, feetY - SPRITE_DRAW_SIZE - 4);
     ctx.restore();
   }
   if (player.status.slowTurns > 0) {
     ctx.save();
     ctx.font = "13px Arial";
     ctx.textAlign = "center";
-    ctx.fillText("❄️", player.x - w * 0.7, bodyTop - 6);
+    ctx.fillText("❄️", player.x - SPRITE_DRAW_SIZE * 0.34, feetY - SPRITE_DRAW_SIZE - 4);
     ctx.restore();
   }
 
   const barW = 62;
   const barX = player.x - barW / 2;
-  const barY = bodyTop - 24;
+  const barY = feetY - SPRITE_DRAW_SIZE - 20;
   ctx.save();
   ctx.fillStyle = "rgba(10,14,24,0.65)";
   roundRect(ctx, barX - 2, barY - 2, barW + 4, 11, 5);
@@ -456,238 +385,31 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState, id: PlayerI
   ctx.restore();
 }
 
-function drawHelmet(
-  ctx: CanvasRenderingContext2D,
-  helmet: "horned" | "hood" | "cap",
-  x: number,
-  y: number,
-  r: number,
-  color: string,
-  accent: string
-) {
-  ctx.save();
-  ctx.fillStyle = color;
-  if (helmet === "horned") {
-    ctx.beginPath();
-    ctx.arc(x, y - r * 0.15, r * 1.05, Math.PI, 0);
-    ctx.fill();
-    ctx.strokeStyle = accent;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x - r * 0.9, y - r * 0.5);
-    ctx.quadraticCurveTo(x - r * 1.6, y - r * 1.3, x - r * 1.3, y - r * 1.9);
-    ctx.moveTo(x + r * 0.9, y - r * 0.5);
-    ctx.quadraticCurveTo(x + r * 1.6, y - r * 1.3, x + r * 1.3, y - r * 1.9);
-    ctx.stroke();
-  } else if (helmet === "hood") {
-    ctx.beginPath();
-    ctx.moveTo(x - r * 1.1, y + r * 0.3);
-    ctx.quadraticCurveTo(x - r * 1.1, y - r * 1.5, x, y - r * 1.7);
-    ctx.quadraticCurveTo(x + r * 1.1, y - r * 1.5, x + r * 1.1, y + r * 0.3);
-    ctx.quadraticCurveTo(x, y - r * 0.15, x - r * 1.1, y + r * 0.3);
-    ctx.closePath();
-    ctx.fill();
+// ---------- Weapon projectile rendering ----------
+// Icons come from the manifest's weapon sprites, keyed by projectile TYPE
+// (arrow/axe/fire/grenade/ice/rocket/shuriken/spear). Axe and shuriken spin
+// continuously in flight; everything else aligns with its velocity vector.
+// Falls back to a plain dot if an icon failed to load.
+
+function drawWeaponIcon(ctx: CanvasRenderingContext2D, type: WeaponDef["type"], colorMain: string, size: number) {
+  const icon = getWeaponIcon(type);
+  if (icon) {
+    ctx.drawImage(icon, -size / 2, -size / 2, size, size);
   } else {
+    ctx.fillStyle = colorMain;
     ctx.beginPath();
-    ctx.arc(x, y - r * 0.1, r * 1.02, Math.PI * 1.05, Math.PI * 1.95);
+    ctx.arc(0, 0, size * 0.22, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = accent;
-    ctx.fillRect(x - r * 0.15, y - r * 1.15, r * 0.3, r * 0.35);
   }
-  ctx.restore();
 }
 
-function getWeaponSpriteImg(type: WeaponDef["type"]): HTMLImageElement | null {
-  if (type === "arrow") return assets.weapons.arrow;
-  if (type === "axe") return assets.weapons.axe;
-  if (type === "fire") return assets.weapons.fire;
-  if (type === "grenade") return assets.weapons.grenade;
-  if (type === "ice") return assets.weapons.ice;
-  if (type === "rocket") return assets.weapons.rocket;
-  if (type === "shuriken") return assets.weapons.shuriken;
-  if (type === "spear") return assets.weapons.spear;
-  return null;
-}
+function drawAimGuide(ctx: CanvasRenderingContext2D, state: GameState, playerId: PlayerId, aim: AimState) {
+  const player = state.players[playerId];
+  const feetY = playerFeetY(state, playerId);
+  const originY = feetY - SPRITE_DRAW_SIZE * 0.6;
+  const originX = player.x + player.facing * (SPRITE_DRAW_SIZE * 0.22);
 
-// Map each weapon's visual drawing size/dimensions for correct scale
-function getWeaponVisualBounds(type: WeaponDef["type"]) {
-  if (type === "fire" || type === "ice") {
-    return { w: 32, h: 14 };
-  }
-  if (type === "spear") {
-    return { w: 26, h: 18 };
-  }
-  if (type === "arrow" || type === "rocket" || type === "axe" || type === "shuriken" || type === "grenade") {
-    return { w: 18, h: 18 };
-  }
-  return { w: 16, h: 16 };
-}
-
-function getWeaponAngleOffset(type: WeaponDef["type"]): number {
-  // If the PNG default direction is not directly pointing right, we can offset it.
-  // Standard arrows, spears, rockets are pointing right.
-  // Let's adjust slightly if needed.
-  if (type === "spear") return -0.4;
-  return 0;
-}
-
-function drawWeaponGlyph(ctx: CanvasRenderingContext2D, type: WeaponDef["type"], scale: number, colorMain: string, colorAccent: string) {
-  const img = getWeaponSpriteImg(type);
-  const bounds = getWeaponVisualBounds(type);
-
-  ctx.save();
-  ctx.scale(scale, scale);
-
-  if (img) {
-    ctx.save();
-    const offset = getWeaponAngleOffset(type);
-    ctx.rotate(offset);
-    ctx.drawImage(img, -bounds.w / 2, -bounds.h / 2, bounds.w, bounds.h);
-    ctx.restore();
-  } else {
-    // Vector Fallback
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    if (type === "arrow" || type === "fire" || type === "ice") {
-      ctx.strokeStyle = "#8a6a3c";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(-11, 0);
-      ctx.lineTo(7, 0);
-      ctx.stroke();
-      ctx.fillStyle = colorAccent;
-      ctx.beginPath();
-      ctx.moveTo(-11, 0);
-      ctx.lineTo(-16, -4);
-      ctx.lineTo(-14, 0);
-      ctx.lineTo(-16, 4);
-      ctx.closePath();
-      ctx.fill();
-      if (type === "arrow") {
-        ctx.fillStyle = "#c8ccd4";
-        ctx.beginPath();
-        ctx.moveTo(7, 0);
-        ctx.lineTo(2, -3.4);
-        ctx.lineTo(2, 3.4);
-        ctx.closePath();
-        ctx.fill();
-      } else if (type === "fire") {
-        ctx.fillStyle = colorMain;
-        ctx.beginPath();
-        ctx.ellipse(7, 0, 5, 3.4, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = "#ffe4a8";
-        ctx.beginPath();
-        ctx.ellipse(8.5, -0.5, 2.4, 1.6, 0, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        ctx.fillStyle = colorMain;
-        ctx.beginPath();
-        ctx.moveTo(9, 0);
-        ctx.lineTo(4, -3.2);
-        ctx.lineTo(2, 0);
-        ctx.lineTo(4, 3.2);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = "rgba(255,255,255,0.7)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-    } else if (type === "spear") {
-      ctx.strokeStyle = "#8a6a3c";
-      ctx.lineWidth = 2.6;
-      ctx.beginPath();
-      ctx.moveTo(-16, 0);
-      ctx.lineTo(9, 0);
-      ctx.stroke();
-      ctx.fillStyle = colorAccent;
-      ctx.beginPath();
-      ctx.moveTo(9, 0);
-      ctx.lineTo(3, -4.4);
-      ctx.lineTo(3, 4.4);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = "#5c4522";
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.moveTo(1, -3);
-      ctx.lineTo(1, 3);
-      ctx.stroke();
-    } else if (type === "axe" || type === "shuriken") {
-      ctx.strokeStyle = "#6b4a2a";
-      ctx.lineWidth = 2.4;
-      ctx.beginPath();
-      ctx.moveTo(-9, 5);
-      ctx.lineTo(8, -5);
-      ctx.stroke();
-      ctx.fillStyle = colorMain;
-      ctx.beginPath();
-      ctx.moveTo(3, -8);
-      ctx.quadraticCurveTo(14, -11, 13, -1);
-      ctx.quadraticCurveTo(10, 3, 2, 0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.5)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    } else if (type === "grenade") {
-      ctx.fillStyle = colorMain;
-      ctx.beginPath();
-      ctx.arc(0, 1, 6.4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#3f4652";
-      ctx.lineWidth = 1.3;
-      ctx.beginPath();
-      ctx.arc(0, 1, 6.4, 0.3, 2.6);
-      ctx.stroke();
-      ctx.strokeStyle = "#9aa4b8";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(-1, -5);
-      ctx.lineTo(2, -9);
-      ctx.stroke();
-    } else if (type === "rocket") {
-      ctx.fillStyle = colorMain;
-      roundRect(ctx, -9, -3.4, 15, 6.8, 3);
-      ctx.fill();
-      ctx.fillStyle = "#e8edf5";
-      ctx.beginPath();
-      ctx.moveTo(6, -3.4);
-      ctx.lineTo(13, 0);
-      ctx.lineTo(6, 3.4);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = "#3f4652";
-      ctx.beginPath();
-      ctx.moveTo(-9, -3.4);
-      ctx.lineTo(-14, -7);
-      ctx.lineTo(-9, -1.5);
-      ctx.closePath();
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(-9, 3.4);
-      ctx.lineTo(-14, 7);
-      ctx.lineTo(-9, 1.5);
-      ctx.closePath();
-      ctx.fill();
-    } else {
-      ctx.fillStyle = colorMain;
-      ctx.beginPath();
-      ctx.arc(0, 0, 6, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  ctx.restore();
-}
-
-function drawAimGuide(ctx: CanvasRenderingContext2D, state: GameState, player: PlayerState, aim: AimState) {
-  const feetY = playerFeetY(state, player.id);
-  const originY = feetY - PLAYER_HEIGHT * 0.62;
-  const originX = player.x + player.facing * (PLAYER_WIDTH * 0.7);
-
-  const weapon = weaponById(state.selectedWeapon[player.id]);
+  const weapon = weaponById(state.selectedWeapon[playerId]);
   const powerRatio = clamp(Math.hypot(aim.dragX, aim.dragY) / MAX_DRAG, 0, 1);
 
   ctx.save();
@@ -698,6 +420,11 @@ function drawAimGuide(ctx: CanvasRenderingContext2D, state: GameState, player: P
   ctx.lineTo(originX + aim.dragX, originY + aim.dragY);
   ctx.stroke();
 
+  // Dotted preview arc — mirrors engine.fire() exactly (same angle clamp,
+  // same weapon speed/weight, same facing lock) and reuses the shared
+  // simulateTrajectory function so the preview can never drift from the
+  // real flight physics used in engine.ts. Deliberately short (per the
+  // design brief: hint at the shot, never reveal the full path).
   const angle = clamp(
     Math.atan2(-aim.dragY, Math.abs(aim.dragX) < 1 ? 1 : Math.abs(aim.dragX)),
     (5 * Math.PI) / 180,
@@ -740,15 +467,13 @@ function drawProjectile(ctx: CanvasRenderingContext2D, state: GameState) {
   }
   ctx.globalAlpha = 1;
 
-  const angle = Math.atan2(proj.vy, proj.vx);
   ctx.translate(proj.x, proj.y);
   if (proj.weapon.type === "axe" || proj.weapon.type === "shuriken") {
-    // Fast continuous spin during flight for spin weapons
-    ctx.rotate(frameClock * 28 * (proj.vx >= 0 ? 1 : -1));
+    ctx.rotate(frameClock * 22 * (proj.vx >= 0 ? 1 : -1));
   } else {
-    ctx.rotate(angle);
+    ctx.rotate(Math.atan2(proj.vy, proj.vx));
   }
-  drawWeaponGlyph(ctx, proj.weapon.type, 1.25, proj.weapon.colorMain, "#e8edf5");
+  drawWeaponIcon(ctx, proj.weapon.type, proj.weapon.colorMain, WEAPON_ICON_SIZE);
   ctx.restore();
 }
 
