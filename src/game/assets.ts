@@ -1,11 +1,12 @@
-// Loads the game sprite manifest and all referenced images once.
+// Loads the sprite manifest and every referenced image once, up front, so
+// gameplay code never awaits a network request mid-render.
 //
-// This version supports:
-// 1. The expected manifest structure used by the Jules branch.
+// Supports:
+// 1. The modern Jules manifest structure.
 // 2. The older manifest structure containing warriorSpriteSheets and paths.
-// 3. Automatic fallback paths if the manifest is missing or invalid.
-// 4. Separate PNG warrior images instead of requiring sprite sheets.
-// 5. Relative asset paths compatible with Vite base: "./" and Capacitor.
+// 3. Default asset paths if the manifest is missing or invalid.
+// 4. Separate PNG images for warriors.
+// 5. Relative paths compatible with Vite base: "./" and Capacitor.
 
 export interface AssetManifest {
   warriorFrameSize: number;
@@ -82,15 +83,41 @@ function copyDefaultManifest(): AssetManifest {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
 }
 
-function isStringRecord(value: unknown): value is Record<string, string> {
-  if (!isRecord(value)) return false;
+function toStringRecord(value: unknown): Record<string, string> | null {
+  if (!isRecord(value)) {
+    return null;
+  }
 
-  return Object.values(value).every(
-    (entry) => typeof entry === "string"
-  );
+  const result: Record<string, string> = {};
+
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry !== "string") {
+      return null;
+    }
+
+    result[key] = entry;
+  }
+
+  return result;
+}
+
+function toStringArray(value: unknown): string[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  if (!value.every((entry) => typeof entry === "string")) {
+    return null;
+  }
+
+  return [...value];
 }
 
 function normalizeManifest(raw: unknown): AssetManifest {
@@ -100,70 +127,76 @@ function normalizeManifest(raw: unknown): AssetManifest {
     return fallback;
   }
 
-  const possibleModernManifest = raw as {
-    warriorFrameSize?: unknown;
-    warriorFrameOrder?: unknown;
-    warriors?: unknown;
-    weapons?: unknown;
-    terrain?: unknown;
-  };
+  const modernWarriors = toStringRecord(raw.warriors);
+  const modernWeapons = toStringRecord(raw.weapons);
+  const modernTerrain = toStringRecord(raw.terrain);
 
-  const hasModernGroups =
-    isStringRecord(possibleModernManifest.warriors) &&
-    isStringRecord(possibleModernManifest.weapons) &&
-    isStringRecord(possibleModernManifest.terrain);
+  if (
+    modernWarriors !== null &&
+    modernWeapons !== null &&
+    modernTerrain !== null
+  ) {
+    const modernFrameOrder = toStringArray(raw.warriorFrameOrder);
 
-  if (hasModernGroups) {
     return {
       warriorFrameSize:
-        typeof possibleModernManifest.warriorFrameSize === "number"
-          ? possibleModernManifest.warriorFrameSize
+        typeof raw.warriorFrameSize === "number" &&
+        Number.isFinite(raw.warriorFrameSize) &&
+        raw.warriorFrameSize > 0
+          ? raw.warriorFrameSize
           : fallback.warriorFrameSize,
 
       warriorFrameOrder:
-        Array.isArray(possibleModernManifest.warriorFrameOrder) &&
-        possibleModernManifest.warriorFrameOrder.every(
-          (entry) => typeof entry === "string"
-        )
-          ? [...possibleModernManifest.warriorFrameOrder]
+        modernFrameOrder !== null && modernFrameOrder.length > 0
+          ? modernFrameOrder
           : ["idle"],
 
       warriors: {
         ...fallback.warriors,
-        ...possibleModernManifest.warriors,
+        ...modernWarriors,
       },
 
       weapons: {
         ...fallback.weapons,
-        ...possibleModernManifest.weapons,
+        ...modernWeapons,
       },
 
       terrain: {
         ...fallback.terrain,
-        ...possibleModernManifest.terrain,
+        ...modernTerrain,
       },
     };
   }
 
   const legacyManifest = raw as LegacyAssetManifest;
 
-  if (
-    legacyManifest.warriorSpriteSheets ||
-    legacyManifest.paths
-  ) {
-    return {
-      ...fallback,
-      warriorFrameSize:
-        legacyManifest.warriorSpriteSheets?.frameWidth ??
-        fallback.warriorFrameSize,
+  const legacyFrameWidth =
+    legacyManifest.warriorSpriteSheets?.frameWidth;
 
-      // The current warrior files are separate PNG images.
-      // Rendering therefore uses the complete image as one idle frame.
-      warriorFrameOrder: ["idle"],
-    };
-  }
+  return {
+    warriorFrameSize:
+      typeof legacyFrameWidth === "number" &&
+      Number.isFinite(legacyFrameWidth) &&
+      legacyFrameWidth > 0
+        ? legacyFrameWidth
+        : fallback.warriorFrameSize,
 
-  return fallback;
+    // Warrior files are currently separate PNG images.
+    // Each complete image is treated as one visual frame.
+    warriorFrameOrder: ["idle"],
+
+    warriors: {
+      ...fallback.warriors,
+    },
+
+    weapons: {
+      ...fallback.weapons,
+    },
+
+    terrain: {
+      ...fallback.terrain,
+    },
+  };
 }
 
 function normalizeAssetPath(relativePath: string): string {
@@ -192,22 +225,31 @@ function normalizeAssetPath(relativePath: string): string {
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const img = new Image();
+    const image = new Image();
 
-    img.onload = () => {
-      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-        resolve(img);
+    image.onload = () => {
+      if (
+        image.naturalWidth > 0 &&
+        image.naturalHeight > 0
+      ) {
+        resolve(image);
       } else {
-        reject(new Error(`Loaded image has invalid dimensions: ${src}`));
+        reject(
+          new Error(
+            `Loaded image has invalid dimensions: ${src}`
+          )
+        );
       }
     };
 
-    img.onerror = () => {
-      reject(new Error(`Failed to load image: ${src}`));
+    image.onerror = () => {
+      reject(
+        new Error(`Failed to load image: ${src}`)
+      );
     };
 
-    img.decoding = "async";
-    img.src = src;
+    image.decoding = "async";
+    image.src = src;
   });
 }
 
@@ -217,24 +259,27 @@ async function loadGroup(
   target: Map<string, HTMLImageElement>
 ): Promise<void> {
   await Promise.all(
-    Object.entries(group).map(async ([key, relativePath]) => {
-      const failureKey = `${groupName}:${key}`;
-      const src = normalizeAssetPath(relativePath);
+    Object.entries(group).map(
+      async ([key, relativePath]) => {
+        const failureKey = `${groupName}:${key}`;
+        const source = normalizeAssetPath(relativePath);
 
-      try {
-        const img = await loadImage(src);
-        target.set(key, img);
-        failed.delete(failureKey);
-      } catch (error) {
-        target.delete(key);
-        failed.add(failureKey);
+        try {
+          const image = await loadImage(source);
 
-        console.warn(
-          `[Assets] Failed to load ${groupName} asset "${key}" from "${src}".`,
-          error
-        );
+          target.set(key, image);
+          failed.delete(failureKey);
+        } catch (error) {
+          target.delete(key);
+          failed.add(failureKey);
+
+          console.warn(
+            `[Assets] Failed to load ${groupName} asset "${key}" from "${source}".`,
+            error
+          );
+        }
       }
-    })
+    )
   );
 }
 
@@ -251,6 +296,7 @@ async function fetchManifest(): Promise<AssetManifest> {
     }
 
     const rawManifest: unknown = await response.json();
+
     return normalizeManifest(rawManifest);
   } catch (error) {
     console.warn(
