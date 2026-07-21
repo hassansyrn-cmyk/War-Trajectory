@@ -16,7 +16,7 @@ import { draw } from "../game/render";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../game/physics";
 import * as audio from "../game/audio";
 import { recordResult } from "../game/storage";
-import { loadAllAssets } from "../game/assets";
+import { loadAssets } from "../game/assets";
 
 interface Props {
   map: MapDef;
@@ -50,15 +50,20 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
   const [, setTick] = useState(0);
   const [confirmQuit, setConfirmQuit] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [assetsLoaded, setAssetsLoaded] = useState(false);
+  const [assetsReady, setAssetsReady] = useState(false);
 
   useEffect(() => {
-    loadAllAssets()
-      .then(() => setAssetsLoaded(true))
-      .catch((err) => {
-        console.error("Critical error during preloading sprites: ", err);
-        setAssetsLoaded(true); // Fallback so the game still starts
+    let cancelled = false;
+    loadAssets()
+      .catch(() => {
+        /* renderer falls back to simple shapes per-sprite */
+      })
+      .finally(() => {
+        if (!cancelled) setAssetsReady(true);
       });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -86,7 +91,6 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
       const fitScale = Math.min(rect.width / WORLD_WIDTH, rect.height / WORLD_HEIGHT);
       const cssOffsetX = (rect.width - WORLD_WIDTH * fitScale) / 2;
       const cssOffsetY = (rect.height - WORLD_HEIGHT * fitScale) / 2;
-      console.log("RESIZE DETAILS:", rect.width, rect.height, "fitScale:", fitScale);
       viewportRef.current = {
         cssScale: fitScale,
         cssOffsetX,
@@ -106,9 +110,10 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
       ro.disconnect();
       window.removeEventListener("orientationchange", resize);
     };
-  }, [assetsLoaded]);
+  }, []);
 
   useEffect(() => {
+    if (!assetsReady) return;
     function loop(ts: number) {
       const state = stateRef.current;
       const last = lastTsRef.current ?? ts;
@@ -160,7 +165,7 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
       if (aiTimerRef.current) window.clearTimeout(aiTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [assetsReady]);
 
   function screenToWorldDelta(dxCss: number, dyCss: number) {
     const vp = viewportRef.current;
@@ -169,7 +174,7 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
 
   function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     const state = stateRef.current;
-    if (state.turn !== "p1" || state.phase !== "aiming" || drawerOpen) return;
+    if (!assetsReady || state.turn !== "p1" || state.phase !== "aiming" || drawerOpen) return;
     (e.target as Element).setPointerCapture(e.pointerId);
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     aimRef.current = { active: true, dragX: 0, dragY: 0 };
@@ -226,24 +231,31 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
     setDrawerOpen(false);
   }
 
-  if (!assetsLoaded) {
-    return (
-      <div className="game-root" style={{ display: "flex", justifyContent: "center", alignItems: "center", flexDirection: "column" }}>
-        <div style={{ fontSize: "24px", color: "#fff", marginBottom: "20px" }}>جاري تحميل الموارد الرسومية...</div>
-        <div className="pip filled" style={{ width: "30px", height: "30px", animation: "spin 1s linear infinite" }} />
-      </div>
-    );
-  }
-
   return (
     <div className="game-root">
       <div className="rotate-prompt">
         <span className="rotate-prompt-icon">📱</span>
         <p>أدر جهازك إلى الوضع الأفقي للعب</p>
       </div>
+      {!assetsReady && (
+        <div className="overlay">
+          <div className="overlay-card">
+            <div className="loading-spinner" />
+            <p>جاري تحميل المحاربين...</p>
+          </div>
+        </div>
+      )}
       <div className="hud-top">
         <div className={"hud-player p1" + (state.turn === "p1" ? " active" : "")}>
-          <span className="hud-portrait" style={{ background: p1Archetype.bodyColor, borderColor: p1Archetype.accentColor }} />
+          <span
+            className="hud-portrait"
+            style={{
+              backgroundImage: `url(assets/sprites/warriors/${p1.archetype}.png)`,
+              backgroundSize: "300% 100%",
+              backgroundPosition: "0% 50%",
+              borderColor: p1Archetype.accentColor,
+            }}
+          />
           <span className="hud-info">
             <span className="hud-name">{p1.nameAr}</span>
             <span className="hud-hp">{Math.round(p1.hp)}/{p1.maxHp}</span>
@@ -260,7 +272,15 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
             <span className="hud-hp">{Math.round(p2.hp)}/{p2.maxHp}</span>
             <span className="hud-name">{p2.nameAr}</span>
           </span>
-          <span className="hud-portrait" style={{ background: p2Archetype.bodyColor, borderColor: p2Archetype.accentColor }} />
+          <span
+            className="hud-portrait"
+            style={{
+              backgroundImage: `url(assets/sprites/warriors/${p2.archetype}.png)`,
+              backgroundSize: "300% 100%",
+              backgroundPosition: "0% 50%",
+              borderColor: p2Archetype.accentColor,
+            }}
+          />
         </div>
       </div>
 
@@ -295,7 +315,10 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
                     disabled={!myTurn || disabled}
                     style={{ borderColor: w.colorMain }}
                   >
-                    <span className="weapon-dot" style={{ background: w.colorMain }} />
+                    <span
+                      className="weapon-icon"
+                      style={{ backgroundColor: w.colorMain, backgroundImage: `url(assets/sprites/weapons/${w.type}.png)` }}
+                    />
                     <span className="weapon-name">{w.nameAr}</span>
                     <span className="weapon-ammo">{infinite ? "∞" : ammo}</span>
                   </button>
@@ -307,7 +330,10 @@ export default function GameScreen({ map, difficulty, muted, onExit }: Props) {
 
         <div className="drawer-collapsed-row">
           <button className="weapon-capsule" onClick={() => setDrawerOpen((v) => !v)} disabled={!myTurn}>
-            <span className="weapon-dot" style={{ background: selectedWeapon.colorMain }} />
+            <span
+              className="weapon-icon small"
+              style={{ backgroundColor: selectedWeapon.colorMain, backgroundImage: `url(assets/sprites/weapons/${selectedWeapon.type}.png)` }}
+            />
             <span className="weapon-name">{selectedWeapon.nameAr}</span>
             <span className="weapon-ammo">{Number.isFinite(selectedAmmo) ? selectedAmmo : "∞"}</span>
             <span className={"chevron" + (drawerOpen ? " open" : "")}>‹</span>

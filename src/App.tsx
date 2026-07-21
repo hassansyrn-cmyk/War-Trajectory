@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import MainMenu from "./components/MainMenu";
 import GameScreen from "./components/GameScreen";
 import { Difficulty, MapDef } from "./game/entities";
 import { loadSave, saveSave } from "./game/storage";
+import { loadAssets } from "./game/assets";
 
 type Screen = "menu" | "game";
 
@@ -11,6 +12,16 @@ export default function App() {
   const [save, setSave] = useState(loadSave());
   const [activeMap, setActiveMap] = useState<MapDef | null>(null);
   const [activeDifficulty, setActiveDifficulty] = useState<Difficulty>("normal");
+
+  useEffect(() => {
+    // Fire-and-forget: by the time the player taps "start match" the sprite
+    // sheets are usually already cached. GameScreen still gates on this
+    // promise itself in case the player is fast.
+    loadAssets().catch(() => {
+      // Missing/renamed asset files — the renderer falls back to simple
+      // shapes per-sprite rather than blocking the whole game.
+    });
+  }, []);
 
   function handleStart(map: MapDef, difficulty: Difficulty) {
     const next = { ...save, lastMapId: map.id, lastDifficulty: difficulty };

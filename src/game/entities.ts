@@ -69,17 +69,17 @@ export const WEAPONS: WeaponDef[] = [
   },
   {
     id: "shuriken",
-    nameAr: "شوريكين",
+    nameAr: "شوريكن",
     type: "shuriken",
-    damage: 22,
-    speedScale: 1.1,
-    weightDrag: 0.95,
-    gravityScale: 0.88,
+    damage: 20,
+    speedScale: 1.2,
+    weightDrag: 0.98,
+    gravityScale: 0.9,
     splashRadius: 0,
-    ammo: 3,
-    ricochet: false,
-    colorMain: "#94a3b8",
-    colorTrail: "rgba(148,163,184,0.5)",
+    ammo: 4,
+    ricochet: true,
+    colorMain: "#c8ccd4",
+    colorTrail: "rgba(200,204,212,0.55)",
   },
   {
     id: "grenade",
@@ -183,13 +183,14 @@ export interface MapDef {
   groundBottom: string;
   windRange: number; // max abs wind strength
   roughness: number; // terrain jaggedness 0..1
-  soilColor: string; // mid-layer material band
-  rockColor: string; // deep foundation band
+  soilColor: string; // mid-layer material band (fallback if the sprite is unavailable)
+  rockColor: string; // deep foundation band (fallback if the sprite is unavailable)
   mountainFar: string; // distant parallax silhouette
   mountainNear: string; // closer parallax silhouette
   cloudColor: string;
   decoColor: string; // grass/bush accent color
   accentGlow: string; // sun/moon + rim-light tint
+  terrainSprite: string; // key into the asset manifest's "terrain" entries
 }
 
 export const MAPS: MapDef[] = [
@@ -209,6 +210,7 @@ export const MAPS: MapDef[] = [
     cloudColor: "rgba(255,244,222,0.75)",
     decoColor: "#8a7239",
     accentGlow: "#ffe6ad",
+    terrainSprite: "platform_desert",
   },
   {
     id: "mountains",
@@ -226,6 +228,7 @@ export const MAPS: MapDef[] = [
     cloudColor: "rgba(232,240,248,0.8)",
     decoColor: "#3f5a3a",
     accentGlow: "#dff0ff",
+    terrainSprite: "platform_grass",
   },
   {
     id: "volcanic",
@@ -243,75 +246,46 @@ export const MAPS: MapDef[] = [
     cloudColor: "rgba(90,50,40,0.5)",
     decoColor: "#5c3a28",
     accentGlow: "#ff8a5c",
+    terrainSprite: "platform_volcanic",
   },
 ];
 
 export interface WarriorArchetype {
-  id: string;
+  id: string; // matches the sprite key in the asset manifest exactly (warriors/<id>.png)
   nameAr: string;
-  build: "bulky" | "lean" | "agile";
-  bodyColor: string;
-  bodyColorDark: string;
-  skinColor: string;
-  accentColor: string;
-  helmet: "horned" | "hood" | "cap";
+  accentColor: string; // used for HUD portrait ring + UI accents only (art now lives in the sprite)
   signatureWeapon: string;
 }
 
 export const ARCHETYPES: WarriorArchetype[] = [
   {
-    id: "axe-warrior",
-    nameAr: "الفولاذي الشمالي (Viking)",
-    build: "bulky",
-    bodyColor: "#3f6fb0",
-    bodyColorDark: "#1c3a5c",
-    skinColor: "#e8b98a",
+    id: "viking",
+    nameAr: "المحارب الفايكنغ",
     accentColor: "#f4d488",
-    helmet: "horned",
     signatureWeapon: "axe",
   },
   {
-    id: "forest-archer",
-    nameAr: "رامي السهام (Archer)",
-    build: "lean",
-    bodyColor: "#d95c5c",
-    bodyColorDark: "#6b2323",
-    skinColor: "#e8b98a",
+    id: "archer",
+    nameAr: "رامي الغابة",
     accentColor: "#facc15",
-    helmet: "hood",
     signatureWeapon: "bow",
   },
   {
-    id: "shadow-scout",
-    nameAr: "نينجا الظل (Ninja)",
-    build: "agile",
-    bodyColor: "#6b46c1",
-    bodyColorDark: "#2f1f52",
-    skinColor: "#d9a877",
+    id: "ninja",
+    nameAr: "النينجا",
     accentColor: "#67e8f9",
-    helmet: "cap",
     signatureWeapon: "shuriken",
   },
   {
-    id: "knight-warrior",
-    nameAr: "الفارس المدرع (Knight)",
-    build: "bulky",
-    bodyColor: "#94a3b8",
-    bodyColorDark: "#475569",
-    skinColor: "#fbcfe8",
-    accentColor: "#fbbf24",
-    helmet: "horned",
+    id: "knight",
+    nameAr: "الفارس المدرّع",
+    accentColor: "#e8edf5",
     signatureWeapon: "spear",
   },
   {
-    id: "engineer-warrior",
-    nameAr: "المهندس التكتيكي (Engineer)",
-    build: "lean",
-    bodyColor: "#f97316",
-    bodyColorDark: "#ea580c",
-    skinColor: "#fed7aa",
-    accentColor: "#3b82f6",
-    helmet: "cap",
+    id: "engineer",
+    nameAr: "المهندس",
+    accentColor: "#a3e635",
     signatureWeapon: "grenade",
   },
 ];
@@ -334,15 +308,13 @@ export interface PlayerState {
   hp: number;
   maxHp: number;
   facing: 1 | -1;
-  color: string;
-  colorDark: string;
   archetype: string;
+  attackPoseUntil: number; // GameState.elapsed timestamp until which the "attack" frame is shown
   ammo: Record<string, number>;
   energy: number;
   cooldowns: Record<string, number>;
   status: StatusEffects;
   damageMultiplierNext: number;
-  attackTimer?: number; // tracker for how long the attack frame is shown (in seconds)
 }
 
 export function freshAmmo(): Record<string, number> {
@@ -372,9 +344,8 @@ export function makePlayer(
     hp: 100,
     maxHp: 100,
     facing,
-    color: archetype.bodyColor,
-    colorDark: archetype.bodyColorDark,
     archetype: archetype.id,
+    attackPoseUntil: 0,
     ammo: freshAmmo(),
     energy: 2,
     cooldowns: freshCooldowns(),
