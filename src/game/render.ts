@@ -17,6 +17,7 @@ import {
   simulateTrajectory,
 } from "./physics";
 import {
+  getManifest,
   getTerrainSprite,
   getWarriorSheet,
   getWeaponIcon,
@@ -770,49 +771,6 @@ function getVisualFacing(
   return player.facing;
 }
 
-function calculateWarriorDrawSize(
-  image: HTMLImageElement
-): {
-  width: number;
-  height: number;
-} {
-  const imageWidth =
-    image.naturalWidth ||
-    image.width ||
-    SPRITE_DRAW_SIZE;
-
-  const imageHeight =
-    image.naturalHeight ||
-    image.height ||
-    SPRITE_DRAW_SIZE;
-
-  const aspectRatio =
-    imageWidth / imageHeight;
-
-  if (!Number.isFinite(aspectRatio)) {
-    return {
-      width: SPRITE_DRAW_SIZE,
-      height: SPRITE_DRAW_SIZE,
-    };
-  }
-
-  if (aspectRatio > 1) {
-    return {
-      width: SPRITE_DRAW_SIZE,
-      height:
-        SPRITE_DRAW_SIZE /
-        aspectRatio,
-    };
-  }
-
-  return {
-    width:
-      SPRITE_DRAW_SIZE *
-      aspectRatio,
-    height: SPRITE_DRAW_SIZE,
-  };
-}
-
 function drawPlayer(
   ctx: CanvasRenderingContext2D,
   state: GameState,
@@ -904,8 +862,6 @@ function drawPlayer(
 
   if (isDefeated) {
     ctx.globalAlpha = 0.55;
-    ctx.translate(0, -3);
-    ctx.rotate(Math.PI / 2);
   } else if (isAttacking) {
     const attackMotion =
       Math.sin(
@@ -929,23 +885,45 @@ function drawPlayer(
   }
 
   if (imageReady) {
-    const drawSize =
-      calculateWarriorDrawSize(image);
+    const manifest = getManifest();
+    const configuredFrameSize = manifest?.warriorFrameSize ?? 256;
 
-    const drawX =
-      -drawSize.width / 2;
+    const isThreeFrameSheet =
+      image.naturalWidth >= image.naturalHeight * 2.9 &&
+      image.naturalWidth <= image.naturalHeight * 3.1;
 
-    const drawY =
-      isDefeated
-        ? -drawSize.height / 2
-        : -drawSize.height;
+    const frameIndex =
+      player.hp <= 0
+        ? 2
+        : state.elapsed < player.attackPoseUntil
+          ? 1
+          : 0;
+
+    let frameWidth = configuredFrameSize;
+    let frameHeight = image.naturalHeight;
+    let finalFrameIndex = frameIndex;
+
+    if (isThreeFrameSheet) {
+      frameWidth = Math.floor(image.naturalWidth / 3);
+      frameHeight = image.naturalHeight;
+    } else {
+      frameWidth = image.naturalWidth;
+      frameHeight = image.naturalHeight;
+      finalFrameIndex = 0;
+    }
+
+    const sourceX = finalFrameIndex * frameWidth;
 
     ctx.drawImage(
       image,
-      drawX,
-      drawY,
-      drawSize.width,
-      drawSize.height
+      sourceX,
+      0,
+      frameWidth,
+      frameHeight,
+      -SPRITE_DRAW_SIZE / 2,
+      -SPRITE_DRAW_SIZE,
+      SPRITE_DRAW_SIZE,
+      SPRITE_DRAW_SIZE
     );
   } else {
     ctx.fillStyle =
