@@ -1,26 +1,19 @@
 {
-  "warriorFrameSize": 256,
-  "warriorFrameOrder": ["idle", "attack", "defeated"],
-  "warriors": {
-    "viking": "sprites/warriors/viking.png",
-    "archer": "sprites/warriors/archer.png",
-    "ninja": "sprites/warriors/ninja.png",
-    "knight": "sprites/warriors/knight.png",
-    "engineer": "sprites/warriors/engineer.png"
+  "warriorSpriteSheets": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "sheetWidth": 768,
+    "sheetHeight": 256,
+    "frames": [
+      "idle",
+      "attack",
+      "defeated"
+    ],
+    "layout": "horizontal"
   },
-  "weapons": {
-    "arrow": "sprites/weapons/arrow.png",
-    "axe": "sprites/weapons/axe.png",
-    "fire": "sprites/weapons/fire.png",
-    "grenade": "sprites/weapons/grenade.png",
-    "ice": "sprites/weapons/ice.png",
-    "rocket": "sprites/weapons/rocket.png",
-    "shuriken": "sprites/weapons/shuriken.png",
-    "spear": "sprites/weapons/spear.png"
-  },
-  "terrain": {
-    "platform_desert": "sprites/terrain/platform_desert.png",
-    "platform_grass": "sprites/terrain/platform_grass.png",
-    "platform_volcanic": "sprites/terrain/platform_volcanic.png"
+  "paths": {
+    "warriors": "/assets/sprites/warriors/",
+    "weapons": "/assets/sprites/weapons/",
+    "terrain": "/assets/sprites/terrain/"
   }
 }
