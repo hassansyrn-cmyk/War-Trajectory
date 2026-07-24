@@ -1,13 +1,13 @@
-// Loads the sprite manifest and every referenced image once, up front, so
-// gameplay code never awaits a network request mid-render.
+// Centralized asset loader for War Trajectory.
 //
 // Supports:
-// 1. The modern Jules manifest structure.
-// 2. The older manifest structure containing warriorSpriteSheets and paths.
-// 3. Default asset paths if the sprite manifest is missing or invalid.
-// 4. Separate PNG images for warriors.
-// 5. Modular character rig parts from assets/characters/rig_manifest.json.
-// 6. Relative paths compatible with Vite base: "./" and Capacitor.
+// 1. Modern sprite manifest.
+// 2. Legacy sprite manifest.
+// 3. Default sprite paths.
+// 4. Existing warrior sprites as automatic fallback.
+// 5. Existing detailed character rigs for compatibility.
+// 6. Simplified Viking rig optimized for mobile animation.
+// 7. Vite and Capacitor relative asset paths.
 
 export interface AssetManifest {
   warriorFrameSize: number;
@@ -26,6 +26,7 @@ interface LegacyAssetManifest {
     frames?: string[];
     layout?: string;
   };
+
   paths?: {
     warriors?: string;
     weapons?: string;
@@ -50,7 +51,18 @@ export type CharacterRigImages = Record<
   HTMLImageElement
 >;
 
+export type SimpleCharacterPartName =
+  | "body"
+  | "weapon_arm"
+  | "cape"
+  | "axe";
+
+export type SimpleCharacterImages = Partial<
+  Record<SimpleCharacterPartName, HTMLImageElement>
+>;
+
 const ASSET_ROOT = "assets/";
+
 const SPRITE_MANIFEST_PATH =
   `${ASSET_ROOT}sprites/manifest.json`;
 
@@ -60,45 +72,98 @@ const CHARACTER_RIG_ROOT =
 const CHARACTER_RIG_MANIFEST_PATH =
   `${CHARACTER_RIG_ROOT}rig_manifest.json`;
 
-// At this stage only the Viking rig is integrated.
-// Other rigs remain in the manifest and can be enabled later.
+const SIMPLE_VIKING_ID = "viking_simple";
+
+const SIMPLE_VIKING_PATHS: Record<
+  SimpleCharacterPartName,
+  string
+> = {
+  body:
+    "characters/viking_simple/body.png",
+
+  weapon_arm:
+    "characters/viking_simple/weapon_arm.png",
+
+  cape:
+    "characters/viking_simple/cape.png",
+
+  axe:
+    "characters/viking_simple/axe.png",
+};
+
+// The detailed Viking rig remains available temporarily
+// so the current renderer continues compiling until render.ts
+// is replaced with the simplified renderer.
 const PRELOAD_CHARACTER_RIGS = new Set<string>([
   "viking",
 ]);
 
 const DEFAULT_MANIFEST: AssetManifest = {
   warriorFrameSize: 256,
-  warriorFrameOrder: ["idle"],
+
+  warriorFrameOrder: [
+    "idle",
+  ],
+
   warriors: {
-    viking: "sprites/warriors/viking.png",
-    archer: "sprites/warriors/archer.png",
-    ninja: "sprites/warriors/ninja.png",
-    knight: "sprites/warriors/knight.png",
-    engineer: "sprites/warriors/engineer.png",
+    viking:
+      "sprites/warriors/viking.png",
+
+    archer:
+      "sprites/warriors/archer.png",
+
+    ninja:
+      "sprites/warriors/ninja.png",
+
+    knight:
+      "sprites/warriors/knight.png",
+
+    engineer:
+      "sprites/warriors/engineer.png",
   },
+
   weapons: {
-    arrow: "sprites/weapons/arrow.png",
-    axe: "sprites/weapons/axe.png",
-    fire: "sprites/weapons/fire.png",
-    grenade: "sprites/weapons/grenade.png",
-    ice: "sprites/weapons/ice.png",
-    rocket: "sprites/weapons/rocket.png",
-    shuriken: "sprites/weapons/shuriken.png",
-    spear: "sprites/weapons/spear.png",
+    arrow:
+      "sprites/weapons/arrow.png",
+
+    axe:
+      "sprites/weapons/axe.png",
+
+    fire:
+      "sprites/weapons/fire.png",
+
+    grenade:
+      "sprites/weapons/grenade.png",
+
+    ice:
+      "sprites/weapons/ice.png",
+
+    rocket:
+      "sprites/weapons/rocket.png",
+
+    shuriken:
+      "sprites/weapons/shuriken.png",
+
+    spear:
+      "sprites/weapons/spear.png",
   },
+
   terrain: {
     platform_desert:
       "sprites/terrain/platform_desert.png",
+
     platform_grass:
       "sprites/terrain/platform_grass.png",
+
     platform_volcanic:
       "sprites/terrain/platform_volcanic.png",
   },
 };
 
 let manifest: AssetManifest | null = null;
-let characterRigManifest: CharacterRigManifest | null =
-  null;
+
+let characterRigManifest:
+  CharacterRigManifest | null = null;
 
 const warriorImages =
   new Map<string, HTMLImageElement>();
@@ -110,22 +175,43 @@ const terrainImages =
   new Map<string, HTMLImageElement>();
 
 const characterRigImages =
-  new Map<string, Map<string, HTMLImageElement>>();
+  new Map<
+    string,
+    Map<string, HTMLImageElement>
+  >();
 
 const characterRigDefinitions =
   new Map<
     string,
-    Map<string, CharacterRigPartDefinition>
+    Map<
+      string,
+      CharacterRigPartDefinition
+    >
   >();
 
 const characterRigPromises =
-  new Map<string, Promise<boolean>>();
+  new Map<
+    string,
+    Promise<boolean>
+  >();
 
-const failed = new Set<string>();
+const simpleCharacterImages =
+  new Map<
+    string,
+    Map<
+      SimpleCharacterPartName,
+      HTMLImageElement
+    >
+  >();
 
-let loadPromise: Promise<AssetManifest> | null = null;
+const failed =
+  new Set<string>();
 
-function copyDefaultManifest(): AssetManifest {
+let loadPromise:
+  Promise<AssetManifest> | null = null;
+
+function copyDefaultManifest():
+  AssetManifest {
   return {
     warriorFrameSize:
       DEFAULT_MANIFEST.warriorFrameSize,
@@ -165,9 +251,13 @@ function toStringRecord(
     return null;
   }
 
-  const result: Record<string, string> = {};
+  const result:
+    Record<string, string> = {};
 
-  for (const [key, entry] of Object.entries(value)) {
+  for (
+    const [key, entry] of
+    Object.entries(value)
+  ) {
     if (typeof entry !== "string") {
       return null;
     }
@@ -187,7 +277,8 @@ function toStringArray(
 
   if (
     !value.every(
-      (entry) => typeof entry === "string"
+      (entry) =>
+        typeof entry === "string"
     )
   ) {
     return null;
@@ -224,7 +315,8 @@ function isNumberTuple(
 function normalizeManifest(
   raw: unknown
 ): AssetManifest {
-  const fallback = copyDefaultManifest();
+  const fallback =
+    copyDefaultManifest();
 
   if (!isRecord(raw)) {
     return fallback;
@@ -245,7 +337,9 @@ function normalizeManifest(
     modernTerrain !== null
   ) {
     const modernFrameOrder =
-      toStringArray(raw.warriorFrameOrder);
+      toStringArray(
+        raw.warriorFrameOrder
+      );
 
     return {
       warriorFrameSize:
@@ -282,18 +376,21 @@ function normalizeManifest(
     raw as LegacyAssetManifest;
 
   const legacyFrameWidth =
-    legacyManifest.warriorSpriteSheets
+    legacyManifest
+      .warriorSpriteSheets
       ?.frameWidth;
 
   return {
     warriorFrameSize:
-      isFinitePositiveNumber(legacyFrameWidth)
+      isFinitePositiveNumber(
+        legacyFrameWidth
+      )
         ? legacyFrameWidth
         : fallback.warriorFrameSize,
 
-    // Warrior files are currently separate PNG images.
-    // Each complete image is treated as one visual frame.
-    warriorFrameOrder: ["idle"],
+    warriorFrameOrder: [
+      "idle",
+    ],
 
     warriors: {
       ...fallback.warriors,
@@ -316,7 +413,8 @@ function normalizeCharacterRigManifest(
     return {};
   }
 
-  const result: CharacterRigManifest = {};
+  const result:
+    CharacterRigManifest = {};
 
   for (
     const [characterId, rawParts] of
@@ -326,7 +424,8 @@ function normalizeCharacterRigManifest(
       continue;
     }
 
-    const parts: CharacterRigPartDefinition[] = [];
+    const parts:
+      CharacterRigPartDefinition[] = [];
 
     for (const rawPart of rawParts) {
       if (!isRecord(rawPart)) {
@@ -334,36 +433,53 @@ function normalizeCharacterRigManifest(
       }
 
       if (
-        typeof rawPart.name !== "string" ||
+        typeof rawPart.name !==
+          "string" ||
         rawPart.name.trim().length === 0
       ) {
         continue;
       }
 
       if (
-        typeof rawPart.file !== "string" ||
+        typeof rawPart.file !==
+          "string" ||
         rawPart.file.trim().length === 0
       ) {
         continue;
       }
 
       if (
-        !isNumberTuple(rawPart.size, 2) ||
-        !isNumberTuple(rawPart.source_box, 4)
+        !isNumberTuple(
+          rawPart.size,
+          2
+        ) ||
+        !isNumberTuple(
+          rawPart.source_box,
+          4
+        )
       ) {
         continue;
       }
 
-      const width = rawPart.size[0];
-      const height = rawPart.size[1];
+      const width =
+        rawPart.size[0];
 
-      if (width <= 0 || height <= 0) {
+      const height =
+        rawPart.size[1];
+
+      if (
+        width <= 0 ||
+        height <= 0
+      ) {
         continue;
       }
 
       parts.push({
-        name: rawPart.name.trim(),
-        file: rawPart.file.trim(),
+        name:
+          rawPart.name.trim(),
+
+        file:
+          rawPart.file.trim(),
 
         size: [
           rawPart.size[0],
@@ -380,7 +496,8 @@ function normalizeCharacterRigManifest(
     }
 
     if (parts.length > 0) {
-      result[characterId] = parts;
+      result[characterId] =
+        parts;
     }
   }
 
@@ -390,23 +507,38 @@ function normalizeCharacterRigManifest(
 function normalizeAssetPath(
   relativePath: string
 ): string {
-  let path = relativePath.trim();
+  let path =
+    relativePath.trim();
 
-  path = path.replace(/\\/g, "/");
+  path =
+    path.replace(/\\/g, "/");
 
-  while (path.startsWith("./")) {
-    path = path.slice(2);
+  while (
+    path.startsWith("./")
+  ) {
+    path =
+      path.slice(2);
   }
 
-  while (path.startsWith("/")) {
-    path = path.slice(1);
+  while (
+    path.startsWith("/")
+  ) {
+    path =
+      path.slice(1);
   }
 
-  if (path.startsWith("public/")) {
-    path = path.slice("public/".length);
+  if (
+    path.startsWith("public/")
+  ) {
+    path =
+      path.slice(
+        "public/".length
+      );
   }
 
-  if (path.startsWith(ASSET_ROOT)) {
+  if (
+    path.startsWith(ASSET_ROOT)
+  ) {
     return path;
   }
 
@@ -416,69 +548,98 @@ function normalizeAssetPath(
 function normalizeCharacterRigPath(
   relativePath: string
 ): string {
-  let path = relativePath.trim();
+  let path =
+    relativePath.trim();
 
-  path = path.replace(/\\/g, "/");
+  path =
+    path.replace(/\\/g, "/");
 
-  while (path.startsWith("./")) {
-    path = path.slice(2);
+  while (
+    path.startsWith("./")
+  ) {
+    path =
+      path.slice(2);
   }
 
-  while (path.startsWith("/")) {
-    path = path.slice(1);
+  while (
+    path.startsWith("/")
+  ) {
+    path =
+      path.slice(1);
   }
 
-  if (path.startsWith("public/")) {
-    path = path.slice("public/".length);
+  if (
+    path.startsWith("public/")
+  ) {
+    path =
+      path.slice(
+        "public/".length
+      );
   }
 
-  if (path.startsWith(CHARACTER_RIG_ROOT)) {
+  if (
+    path.startsWith(
+      CHARACTER_RIG_ROOT
+    )
+  ) {
     return path;
   }
 
-  if (path.startsWith(ASSET_ROOT)) {
+  if (
+    path.startsWith(ASSET_ROOT)
+  ) {
     return path;
   }
 
-  if (path.startsWith("characters/")) {
+  if (
+    path.startsWith(
+      "characters/"
+    )
+  ) {
     return ASSET_ROOT + path;
   }
 
-  return CHARACTER_RIG_ROOT + path;
+  return (
+    CHARACTER_RIG_ROOT +
+    path
+  );
 }
 
 function loadImage(
   src: string
 ): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
+  return new Promise(
+    (resolve, reject) => {
+      const image =
+        new Image();
 
-    image.onload = () => {
-      if (
-        image.naturalWidth > 0 &&
-        image.naturalHeight > 0
-      ) {
-        resolve(image);
-      } else {
+      image.onload = () => {
+        if (
+          image.naturalWidth > 0 &&
+          image.naturalHeight > 0
+        ) {
+          resolve(image);
+        } else {
+          reject(
+            new Error(
+              `Loaded image has invalid dimensions: ${src}`
+            )
+          );
+        }
+      };
+
+      image.onerror = () => {
         reject(
           new Error(
-            `Loaded image has invalid dimensions: ${src}`
+            `Failed to load image: ${src}`
           )
         );
-      }
-    };
+      };
 
-    image.onerror = () => {
-      reject(
-        new Error(
-          `Failed to load image: ${src}`
-        )
-      );
-    };
-
-    image.decoding = "async";
-    image.src = src;
-  });
+      image.decoding = "async";
+      image.src = src;
+    }
+  );
 }
 
 async function loadGroup(
@@ -487,28 +648,43 @@ async function loadGroup(
     | "weapons"
     | "terrain",
 
-  group: Record<string, string>,
+  group:
+    Record<string, string>,
 
-  target: Map<string, HTMLImageElement>
+  target:
+    Map<string, HTMLImageElement>
 ): Promise<void> {
   await Promise.all(
     Object.entries(group).map(
-      async ([key, relativePath]) => {
+      async (
+        [key, relativePath]
+      ) => {
         const failureKey =
           `${groupName}:${key}`;
 
         const source =
-          normalizeAssetPath(relativePath);
+          normalizeAssetPath(
+            relativePath
+          );
 
         try {
           const image =
             await loadImage(source);
 
-          target.set(key, image);
-          failed.delete(failureKey);
+          target.set(
+            key,
+            image
+          );
+
+          failed.delete(
+            failureKey
+          );
         } catch (error) {
           target.delete(key);
-          failed.add(failureKey);
+
+          failed.add(
+            failureKey
+          );
 
           console.warn(
             `[Assets] Failed to load ${groupName} asset "${key}" from "${source}".`,
@@ -523,12 +699,13 @@ async function loadGroup(
 async function fetchSpriteManifest():
   Promise<AssetManifest> {
   try {
-    const response = await fetch(
-      SPRITE_MANIFEST_PATH,
-      {
-        cache: "no-cache",
-      }
-    );
+    const response =
+      await fetch(
+        SPRITE_MANIFEST_PATH,
+        {
+          cache: "no-cache",
+        }
+      );
 
     if (!response.ok) {
       throw new Error(
@@ -539,7 +716,9 @@ async function fetchSpriteManifest():
     const rawManifest: unknown =
       await response.json();
 
-    return normalizeManifest(rawManifest);
+    return normalizeManifest(
+      rawManifest
+    );
   } catch (error) {
     console.warn(
       `[Assets] Could not use "${SPRITE_MANIFEST_PATH}". Default asset paths will be used.`,
@@ -553,12 +732,13 @@ async function fetchSpriteManifest():
 async function fetchCharacterRigManifest():
   Promise<CharacterRigManifest> {
   try {
-    const response = await fetch(
-      CHARACTER_RIG_MANIFEST_PATH,
-      {
-        cache: "no-cache",
-      }
-    );
+    const response =
+      await fetch(
+        CHARACTER_RIG_MANIFEST_PATH,
+        {
+          cache: "no-cache",
+        }
+      );
 
     if (!response.ok) {
       throw new Error(
@@ -574,7 +754,7 @@ async function fetchCharacterRigManifest():
     );
   } catch (error) {
     console.warn(
-      `[Assets] Could not use "${CHARACTER_RIG_MANIFEST_PATH}". Modular character rigs will be disabled.`,
+      `[Assets] Could not use "${CHARACTER_RIG_MANIFEST_PATH}". Detailed character rigs will be disabled.`,
       error
     );
 
@@ -583,7 +763,8 @@ async function fetchCharacterRigManifest():
 }
 
 function registerRigDefinitions(
-  rigManifest: CharacterRigManifest
+  rigManifest:
+    CharacterRigManifest
 ): void {
   characterRigDefinitions.clear();
 
@@ -598,7 +779,10 @@ function registerRigDefinitions(
       >();
 
     for (const part of parts) {
-      definitions.set(part.name, part);
+      definitions.set(
+        part.name,
+        part
+      );
     }
 
     characterRigDefinitions.set(
@@ -616,14 +800,18 @@ export async function loadCharacterRig(
   }
 
   const existingPromise =
-    characterRigPromises.get(characterId);
+    characterRigPromises.get(
+      characterId
+    );
 
   if (existingPromise) {
     return existingPromise;
   }
 
   const definitions =
-    characterRigManifest[characterId];
+    characterRigManifest[
+      characterId
+    ];
 
   if (
     !definitions ||
@@ -638,34 +826,52 @@ export async function loadCharacterRig(
 
   const promise = (async () => {
     const images =
-      new Map<string, HTMLImageElement>();
+      new Map<
+        string,
+        HTMLImageElement
+      >();
 
     let allPartsLoaded = true;
 
     await Promise.all(
-      definitions.map(async (part) => {
-        const failureKey =
-          `character-rig:${characterId}:${part.name}`;
+      definitions.map(
+        async (part) => {
+          const failureKey =
+            `character-rig:${characterId}:${part.name}`;
 
-        const source =
-          normalizeCharacterRigPath(part.file);
+          const source =
+            normalizeCharacterRigPath(
+              part.file
+            );
 
-        try {
-          const image =
-            await loadImage(source);
+          try {
+            const image =
+              await loadImage(
+                source
+              );
 
-          images.set(part.name, image);
-          failed.delete(failureKey);
-        } catch (error) {
-          allPartsLoaded = false;
-          failed.add(failureKey);
+            images.set(
+              part.name,
+              image
+            );
 
-          console.warn(
-            `[Assets] Failed to load character rig part "${characterId}/${part.name}" from "${source}".`,
-            error
-          );
+            failed.delete(
+              failureKey
+            );
+          } catch (error) {
+            allPartsLoaded = false;
+
+            failed.add(
+              failureKey
+            );
+
+            console.warn(
+              `[Assets] Failed to load detailed rig part "${characterId}/${part.name}" from "${source}".`,
+              error
+            );
+          }
         }
-      })
+      )
     );
 
     if (allPartsLoaded) {
@@ -678,21 +884,15 @@ export async function loadCharacterRig(
         `character-rig:${characterId}`
       );
 
-      console.log(
-        `[Assets] Character rig "${characterId}" loaded with ${images.size} parts.`
-      );
-
       return true;
     }
 
-    characterRigImages.delete(characterId);
+    characterRigImages.delete(
+      characterId
+    );
 
     failed.add(
       `character-rig:${characterId}`
-    );
-
-    console.warn(
-      `[Assets] Character rig "${characterId}" is incomplete. The existing warrior sprite will be used as fallback.`
     );
 
     return false;
@@ -713,12 +913,106 @@ async function preloadEnabledCharacterRigs():
   }
 
   await Promise.all(
-    [...PRELOAD_CHARACTER_RIGS].map(
+    [
+      ...PRELOAD_CHARACTER_RIGS,
+    ].map(
       async (characterId) => {
-        await loadCharacterRig(characterId);
+        await loadCharacterRig(
+          characterId
+        );
       }
     )
   );
+}
+
+async function loadSimpleViking():
+  Promise<boolean> {
+  const images =
+    new Map<
+      SimpleCharacterPartName,
+      HTMLImageElement
+    >();
+
+  let allPartsLoaded = true;
+
+  await Promise.all(
+    (
+      Object.entries(
+        SIMPLE_VIKING_PATHS
+      ) as [
+        SimpleCharacterPartName,
+        string,
+      ][]
+    ).map(
+      async (
+        [partName, relativePath]
+      ) => {
+        const failureKey =
+          `simple-character:${SIMPLE_VIKING_ID}:${partName}`;
+
+        const source =
+          normalizeAssetPath(
+            relativePath
+          );
+
+        try {
+          const image =
+            await loadImage(source);
+
+          images.set(
+            partName,
+            image
+          );
+
+          failed.delete(
+            failureKey
+          );
+        } catch (error) {
+          allPartsLoaded = false;
+
+          failed.add(
+            failureKey
+          );
+
+          console.warn(
+            `[Assets] Failed to load simplified Viking part "${partName}" from "${source}".`,
+            error
+          );
+        }
+      }
+    )
+  );
+
+  if (allPartsLoaded) {
+    simpleCharacterImages.set(
+      SIMPLE_VIKING_ID,
+      images
+    );
+
+    failed.delete(
+      `simple-character:${SIMPLE_VIKING_ID}`
+    );
+
+    console.log(
+      `[Assets] Simplified Viking loaded with ${images.size} parts.`
+    );
+
+    return true;
+  }
+
+  simpleCharacterImages.delete(
+    SIMPLE_VIKING_ID
+  );
+
+  failed.add(
+    `simple-character:${SIMPLE_VIKING_ID}`
+  );
+
+  console.warn(
+    "[Assets] Simplified Viking is incomplete. The existing warrior sprite will be used as fallback."
+  );
+
+  return false;
 }
 
 export function loadAssets():
@@ -736,16 +1030,21 @@ export function loadAssets():
       fetchCharacterRigManifest(),
     ]);
 
-    manifest = loadedSpriteManifest;
+    manifest =
+      loadedSpriteManifest;
+
     characterRigManifest =
       loadedRigManifest;
 
     warriorImages.clear();
     weaponImages.clear();
     terrainImages.clear();
+
     characterRigImages.clear();
-    characterRigPromises.clear();
     characterRigDefinitions.clear();
+    characterRigPromises.clear();
+
+    simpleCharacterImages.clear();
     failed.clear();
 
     registerRigDefinitions(
@@ -772,10 +1071,12 @@ export function loadAssets():
       ),
 
       preloadEnabledCharacterRigs(),
+
+      loadSimpleViking(),
     ]);
 
     console.log(
-      `[Assets] Loading finished. Warriors: ${warriorImages.size}, weapons: ${weaponImages.size}, terrain: ${terrainImages.size}, character rigs: ${characterRigImages.size}.`
+      `[Assets] Loading finished. Warriors: ${warriorImages.size}, weapons: ${weaponImages.size}, terrain: ${terrainImages.size}, detailed rigs: ${characterRigImages.size}, simple characters: ${simpleCharacterImages.size}.`
     );
 
     return manifest;
@@ -797,20 +1098,105 @@ export function getCharacterRigManifest():
 export function getWarriorSheet(
   archetypeId: string
 ): HTMLImageElement | undefined {
-  return warriorImages.get(archetypeId);
+  return warriorImages.get(
+    archetypeId
+  );
 }
 
 export function getWeaponIcon(
   weaponType: string
 ): HTMLImageElement | undefined {
-  return weaponImages.get(weaponType);
+  return weaponImages.get(
+    weaponType
+  );
 }
 
 export function getTerrainSprite(
   spriteKey: string
 ): HTMLImageElement | undefined {
-  return terrainImages.get(spriteKey);
+  return terrainImages.get(
+    spriteKey
+  );
 }
+
+export function getSimpleVikingPart(
+  partName:
+    SimpleCharacterPartName
+): HTMLImageElement | undefined {
+  return simpleCharacterImages
+    .get(SIMPLE_VIKING_ID)
+    ?.get(partName);
+}
+
+export function getSimpleCharacterPart(
+  characterId: string,
+  partName:
+    SimpleCharacterPartName
+): HTMLImageElement | undefined {
+  return simpleCharacterImages
+    .get(characterId)
+    ?.get(partName);
+}
+
+export function getSimpleVikingParts():
+  ReadonlyMap<
+    SimpleCharacterPartName,
+    HTMLImageElement
+  > | undefined {
+  return simpleCharacterImages.get(
+    SIMPLE_VIKING_ID
+  );
+}
+
+export function isSimpleVikingReady():
+  boolean {
+  const images =
+    simpleCharacterImages.get(
+      SIMPLE_VIKING_ID
+    );
+
+  if (!images) {
+    return false;
+  }
+
+  const requiredParts:
+    SimpleCharacterPartName[] = [
+      "body",
+      "weapon_arm",
+      "cape",
+      "axe",
+    ];
+
+  for (
+    const partName of
+    requiredParts
+  ) {
+    const image =
+      images.get(partName);
+
+    if (
+      !image ||
+      !image.complete ||
+      image.naturalWidth <= 0 ||
+      image.naturalHeight <= 0
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+export function simpleVikingFailed():
+  boolean {
+  return failed.has(
+    `simple-character:${SIMPLE_VIKING_ID}`
+  );
+}
+
+// Compatibility functions for the previous detailed-rig renderer.
+// These can be removed after render.ts is converted completely
+// to the simplified animation system.
 
 export function getCharacterRigPart(
   characterId: string,
@@ -827,7 +1213,9 @@ export function getCharacterRigParts(
   string,
   HTMLImageElement
 > | undefined {
-  return characterRigImages.get(characterId);
+  return characterRigImages.get(
+    characterId
+  );
 }
 
 export function getCharacterRigPartDefinition(
@@ -854,20 +1242,26 @@ export function getCharacterRigPartNames(
   characterId: string
 ): string[] {
   const definitions =
-    characterRigDefinitions.get(characterId);
+    characterRigDefinitions.get(
+      characterId
+    );
 
   if (!definitions) {
     return [];
   }
 
-  return [...definitions.keys()];
+  return [
+    ...definitions.keys(),
+  ];
 }
 
 export function isCharacterRigAvailable(
   characterId: string
 ): boolean {
   const definitions =
-    characterRigDefinitions.get(characterId);
+    characterRigDefinitions.get(
+      characterId
+    );
 
   return Boolean(
     definitions &&
@@ -879,10 +1273,14 @@ export function isCharacterRigReady(
   characterId: string
 ): boolean {
   const definitions =
-    characterRigDefinitions.get(characterId);
+    characterRigDefinitions.get(
+      characterId
+    );
 
   const images =
-    characterRigImages.get(characterId);
+    characterRigImages.get(
+      characterId
+    );
 
   if (
     !definitions ||
@@ -892,12 +1290,19 @@ export function isCharacterRigReady(
     return false;
   }
 
-  if (images.size !== definitions.size) {
+  if (
+    images.size !==
+    definitions.size
+  ) {
     return false;
   }
 
-  for (const partName of definitions.keys()) {
-    const image = images.get(partName);
+  for (
+    const partName of
+    definitions.keys()
+  ) {
+    const image =
+      images.get(partName);
 
     if (
       !image ||
@@ -927,28 +1332,55 @@ export function assetFailed(
     return true;
   }
 
-  if (failed.has(`warriors:${key}`)) {
-    return true;
-  }
-
-  if (failed.has(`weapons:${key}`)) {
-    return true;
-  }
-
-  if (failed.has(`terrain:${key}`)) {
-    return true;
-  }
-
   if (
-    failed.has(`character-rig:${key}`)
+    failed.has(
+      `warriors:${key}`
+    )
   ) {
     return true;
   }
 
-  for (const failureKey of failed) {
+  if (
+    failed.has(
+      `weapons:${key}`
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    failed.has(
+      `terrain:${key}`
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    failed.has(
+      `character-rig:${key}`
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    failed.has(
+      `simple-character:${key}`
+    )
+  ) {
+    return true;
+  }
+
+  for (
+    const failureKey of failed
+  ) {
     if (
       failureKey.startsWith(
         `character-rig:${key}:`
+      ) ||
+      failureKey.startsWith(
+        `simple-character:${key}:`
       )
     ) {
       return true;
@@ -958,16 +1390,20 @@ export function assetFailed(
   return false;
 }
 
-export function areAssetsLoaded(): boolean {
+export function areAssetsLoaded():
+  boolean {
   return manifest !== null;
 }
 
 export function areCharacterRigAssetsLoaded():
   boolean {
-  return characterRigManifest !== null;
+  return (
+    characterRigManifest !== null
+  );
 }
 
-export function resetAssets(): void {
+export function resetAssets():
+  void {
   manifest = null;
   characterRigManifest = null;
   loadPromise = null;
@@ -975,8 +1411,12 @@ export function resetAssets(): void {
   warriorImages.clear();
   weaponImages.clear();
   terrainImages.clear();
+
   characterRigImages.clear();
   characterRigDefinitions.clear();
   characterRigPromises.clear();
+
+  simpleCharacterImages.clear();
+
   failed.clear();
 }
