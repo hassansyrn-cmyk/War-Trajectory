@@ -1,4 +1,9 @@
-import { PlayerId, WeaponDef, archetypeById } from "./entities";
+import {
+  PlayerId,
+  WeaponDef,
+  archetypeById,
+} from "./entities";
+
 import {
   Camera,
   GameState,
@@ -9,6 +14,7 @@ import {
   playerFeetY,
   weaponById,
 } from "./engine";
+
 import {
   TERRAIN_SAMPLES,
   WORLD_HEIGHT,
@@ -16,11 +22,14 @@ import {
   clamp,
   simulateTrajectory,
 } from "./physics";
+
 import {
+  getCharacterRigPart,
   getManifest,
   getTerrainSprite,
   getWarriorSheet,
   getWeaponIcon,
+  isCharacterRigReady,
 } from "./assets";
 
 export interface AimState {
@@ -33,6 +42,9 @@ export interface AimState {
 // PLAYER_HEIGHT and PLAYER_WIDTH remain dedicated to gameplay collision math.
 const SPRITE_DRAW_SIZE = 108;
 const WEAPON_ICON_SIZE = 30;
+
+const VIKING_RIG_ID = "viking";
+const VIKING_RIG_HEIGHT = 112;
 
 let frameClock = 0;
 
@@ -61,11 +73,19 @@ export function draw(
 
   const activePlayer = state.players[state.turn];
 
-  drawPlayer(ctx, state, "p1");
-  drawPlayer(ctx, state, "p2");
+  drawPlayer(ctx, state, "p1", aim);
+  drawPlayer(ctx, state, "p2", aim);
 
-  if (aim.active && state.phase === "aiming") {
-    drawAimGuide(ctx, state, activePlayer.id, aim);
+  if (
+    aim.active &&
+    state.phase === "aiming"
+  ) {
+    drawAimGuide(
+      ctx,
+      state,
+      activePlayer.id,
+      aim
+    );
   }
 
   if (state.projectile) {
@@ -86,74 +106,132 @@ function applyCamera(
   ctx: CanvasRenderingContext2D,
   cam: Camera
 ) {
-  ctx.translate(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+  ctx.translate(
+    WORLD_WIDTH / 2,
+    WORLD_HEIGHT / 2
+  );
+
   ctx.scale(cam.zoom, cam.zoom);
-  ctx.translate(-cam.x, -cam.y);
+
+  ctx.translate(
+    -cam.x,
+    -cam.y
+  );
 }
 
 function drawSky(
   ctx: CanvasRenderingContext2D,
   state: GameState
 ) {
-  const gradient = ctx.createLinearGradient(
+  const gradient =
+    ctx.createLinearGradient(
+      0,
+      0,
+      0,
+      WORLD_HEIGHT
+    );
+
+  gradient.addColorStop(
     0,
-    0,
-    0,
-    WORLD_HEIGHT
+    state.map.skyTop
   );
 
-  gradient.addColorStop(0, state.map.skyTop);
-  gradient.addColorStop(1, state.map.skyBottom);
+  gradient.addColorStop(
+    1,
+    state.map.skyBottom
+  );
 
   ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+
+  ctx.fillRect(
+    0,
+    0,
+    WORLD_WIDTH,
+    WORLD_HEIGHT
+  );
 
   ctx.save();
 
   const sunX = WORLD_WIDTH * 0.8;
   const sunY = WORLD_HEIGHT * 0.16;
 
-  const glow = ctx.createRadialGradient(
-    sunX,
-    sunY,
-    4,
-    sunX,
-    sunY,
-    70
+  const glow =
+    ctx.createRadialGradient(
+      sunX,
+      sunY,
+      4,
+      sunX,
+      sunY,
+      70
+    );
+
+  glow.addColorStop(
+    0,
+    state.map.accentGlow
   );
 
-  glow.addColorStop(0, state.map.accentGlow);
-  glow.addColorStop(1, "rgba(255,255,255,0)");
+  glow.addColorStop(
+    1,
+    "rgba(255,255,255,0)"
+  );
 
   ctx.fillStyle = glow;
   ctx.beginPath();
-  ctx.arc(sunX, sunY, 70, 0, Math.PI * 2);
+  ctx.arc(
+    sunX,
+    sunY,
+    70,
+    0,
+    Math.PI * 2
+  );
   ctx.fill();
 
   ctx.globalAlpha = 0.95;
   ctx.fillStyle = "#fff7e0";
   ctx.beginPath();
-  ctx.arc(sunX, sunY, 22, 0, Math.PI * 2);
+  ctx.arc(
+    sunX,
+    sunY,
+    22,
+    0,
+    Math.PI * 2
+  );
   ctx.fill();
 
   ctx.restore();
 
   ctx.save();
 
-  ctx.fillStyle = state.map.cloudColor;
+  ctx.fillStyle =
+    state.map.cloudColor;
 
-  const cloudSeed = hashMap(state.map.id);
+  const cloudSeed =
+    hashMap(state.map.id);
 
   for (let i = 0; i < 5; i++) {
     const t =
-      ((cloudSeed + i * 137 + frameClock * 3) % 1000) /
-      1000;
+      (
+        (
+          cloudSeed +
+          i * 137 +
+          frameClock * 3
+        ) %
+        1000
+      ) / 1000;
 
-    const cloudX = t * (WORLD_WIDTH + 260) - 130;
+    const cloudX =
+      t * (WORLD_WIDTH + 260) - 130;
 
     const cloudY =
       WORLD_HEIGHT *
-      (0.08 + (((i * 71) % 100) / 100) * 0.16);
+      (
+        0.08 +
+        (
+          ((i * 71) % 100) /
+          100
+        ) *
+          0.16
+      );
 
     drawCloud(
       ctx,
@@ -212,7 +290,10 @@ function hashMap(id: string): number {
 
   for (let i = 0; i < id.length; i++) {
     hash =
-      (hash * 31 + id.charCodeAt(i)) >>> 0;
+      (
+        hash * 31 +
+        id.charCodeAt(i)
+      ) >>> 0;
   }
 
   return hash % 1000;
@@ -223,7 +304,10 @@ function drawParallaxLayers(
   state: GameState
 ) {
   const cameraShift =
-    (state.camera.x - WORLD_WIDTH / 2) * -1;
+    (
+      state.camera.x -
+      WORLD_WIDTH / 2
+    ) * -1;
 
   drawMountainLayer(
     ctx,
@@ -258,26 +342,40 @@ function drawMountainLayer(
   ctx.globalAlpha = 0.85;
 
   ctx.beginPath();
-  ctx.moveTo(-40 + shiftX, WORLD_HEIGHT + 4);
+
+  ctx.moveTo(
+    -40 + shiftX,
+    WORLD_HEIGHT + 4
+  );
 
   const peaks = 7;
 
-  for (let i = 0; i <= peaks; i++) {
+  for (
+    let i = 0;
+    i <= peaks;
+    i++
+  ) {
     const x =
       shiftX -
       60 +
-      (i / peaks) * (WORLD_WIDTH + 120);
+      (i / peaks) *
+        (WORLD_WIDTH + 120);
 
     const noise =
-      Math.sin(i * 12.9898 + seed) *
-      43758.5453;
+      Math.sin(
+        i * 12.9898 + seed
+      ) * 43758.5453;
 
     const fraction =
       noise - Math.floor(noise);
 
     const y =
       baseY -
-      amplitude * (0.35 + fraction * 0.65);
+      amplitude *
+        (
+          0.35 +
+          fraction * 0.65
+        );
 
     ctx.lineTo(x, y);
   }
@@ -296,13 +394,24 @@ function drawMountainLayer(
 function terrainPoints(
   state: GameState
 ): { x: number; y: number }[] {
-  const points: { x: number; y: number }[] = [];
+  const points: {
+    x: number;
+    y: number;
+  }[] = [];
 
-  for (let i = 0; i < TERRAIN_SAMPLES; i++) {
+  for (
+    let i = 0;
+    i < TERRAIN_SAMPLES;
+    i++
+  ) {
     points.push({
       x:
-        (i / (TERRAIN_SAMPLES - 1)) *
+        (
+          i /
+          (TERRAIN_SAMPLES - 1)
+        ) *
         WORLD_WIDTH,
+
       y: state.terrain[i],
     });
   }
@@ -312,7 +421,10 @@ function terrainPoints(
 
 function clipToTerrainSilhouette(
   ctx: CanvasRenderingContext2D,
-  points: { x: number; y: number }[]
+  points: {
+    x: number;
+    y: number;
+  }[]
 ) {
   ctx.beginPath();
 
@@ -322,7 +434,10 @@ function clipToTerrainSilhouette(
   );
 
   for (const point of points) {
-    ctx.lineTo(point.x, point.y);
+    ctx.lineTo(
+      point.x,
+      point.y
+    );
   }
 
   ctx.lineTo(
@@ -349,16 +464,25 @@ function drawTerrain(
   ctx: CanvasRenderingContext2D,
   state: GameState
 ) {
-  const points = terrainPoints(state);
-  const sprite = getTerrainSprite(
-    state.map.terrainSprite
-  );
+  const points =
+    terrainPoints(state);
+
+  const sprite =
+    getTerrainSprite(
+      state.map.terrainSprite
+    );
 
   ctx.save();
-  clipToTerrainSilhouette(ctx, points);
+
+  clipToTerrainSilhouette(
+    ctx,
+    points
+  );
 
   if (isImageReady(sprite)) {
-    ctx.fillStyle = state.map.rockColor;
+    ctx.fillStyle =
+      state.map.rockColor;
+
     ctx.fillRect(
       0,
       0,
@@ -400,12 +524,13 @@ function drawTerrain(
       16
     );
 
-    const gradient = ctx.createLinearGradient(
-      0,
-      WORLD_HEIGHT * 0.4,
-      0,
-      WORLD_HEIGHT * 0.4 + 30
-    );
+    const gradient =
+      ctx.createLinearGradient(
+        0,
+        WORLD_HEIGHT * 0.4,
+        0,
+        WORLD_HEIGHT * 0.4 + 30
+      );
 
     gradient.addColorStop(
       0,
@@ -431,44 +556,59 @@ function drawTerrain(
 
   ctx.beginPath();
 
-  points.forEach((point, index) => {
-    if (index === 0) {
-      ctx.moveTo(point.x, point.y);
-    } else {
-      ctx.lineTo(point.x, point.y);
+  points.forEach(
+    (point, index) => {
+      if (index === 0) {
+        ctx.moveTo(
+          point.x,
+          point.y
+        );
+      } else {
+        ctx.lineTo(
+          point.x,
+          point.y
+        );
+      }
     }
-  });
+  );
 
   ctx.strokeStyle =
     "rgba(255,255,255,0.22)";
+
   ctx.lineWidth = 2;
   ctx.stroke();
 
   ctx.beginPath();
 
-  points.forEach((point, index) => {
-    if (index === 0) {
-      ctx.moveTo(
-        point.x,
-        point.y + 1.5
-      );
-    } else {
-      ctx.lineTo(
-        point.x,
-        point.y + 1.5
-      );
+  points.forEach(
+    (point, index) => {
+      if (index === 0) {
+        ctx.moveTo(
+          point.x,
+          point.y + 1.5
+        );
+      } else {
+        ctx.lineTo(
+          point.x,
+          point.y + 1.5
+        );
+      }
     }
-  });
+  );
 
   ctx.strokeStyle =
     "rgba(0,0,0,0.28)";
+
   ctx.lineWidth = 2;
   ctx.stroke();
 }
 
 function fillTerrainBand(
   ctx: CanvasRenderingContext2D,
-  points: { x: number; y: number }[],
+  points: {
+    x: number;
+    y: number;
+  }[],
   bottomY: number,
   fill: string | CanvasGradient,
   yOffset: number,
@@ -543,13 +683,18 @@ function drawDecorations(
   ctx: CanvasRenderingContext2D,
   state: GameState
 ) {
-  for (const decoration of state.decorations) {
-    const terrainY = sampleTerrainY(
-      state.terrain,
-      decoration.x
-    );
+  for (
+    const decoration of
+    state.decorations
+  ) {
+    const terrainY =
+      sampleTerrainY(
+        state.terrain,
+        decoration.x
+      );
 
     ctx.save();
+
     ctx.translate(
       decoration.x,
       terrainY
@@ -562,10 +707,17 @@ function drawDecorations(
     ctx.fillStyle =
       state.map.decoColor;
 
-    if (decoration.type === "grass") {
-      const size = 6 * decoration.size;
+    if (
+      decoration.type === "grass"
+    ) {
+      const size =
+        6 * decoration.size;
 
-      for (let i = -1; i <= 1; i++) {
+      for (
+        let i = -1;
+        i <= 1;
+        i++
+      ) {
         ctx.beginPath();
 
         ctx.moveTo(
@@ -592,35 +744,43 @@ function drawDecorations(
     } else if (
       decoration.type === "rock"
     ) {
-      const size = 7 * decoration.size;
+      const size =
+        7 * decoration.size;
 
       ctx.beginPath();
       ctx.moveTo(-size, 2);
+
       ctx.lineTo(
         -size * 0.6,
         -size * 0.7
       );
+
       ctx.lineTo(
         size * 0.2,
         -size * 0.9
       );
+
       ctx.lineTo(
         size,
         -size * 0.1
       );
+
       ctx.lineTo(
         size * 0.7,
         2
       );
+
       ctx.closePath();
       ctx.fill();
 
       ctx.strokeStyle =
         "rgba(0,0,0,0.2)";
+
       ctx.lineWidth = 1;
       ctx.stroke();
     } else {
-      const size = 8 * decoration.size;
+      const size =
+        8 * decoration.size;
 
       ctx.beginPath();
 
@@ -645,11 +805,12 @@ function sampleTerrainY(
   terrain: number[],
   x: number
 ): number {
-  const normalizedX = clamp(
-    x / WORLD_WIDTH,
-    0,
-    0.999999
-  );
+  const normalizedX =
+    clamp(
+      x / WORLD_WIDTH,
+      0,
+      0.999999
+    );
 
   const index =
     normalizedX *
@@ -679,25 +840,31 @@ function drawWindIndicator(
   ctx: CanvasRenderingContext2D,
   state: GameState
 ) {
-  const centerX = WORLD_WIDTH / 2;
-  const centerY = 24;
+  const centerX =
+    WORLD_WIDTH / 2;
 
+  const centerY = 24;
   const wind = state.wind;
-  const direction = wind >= 0 ? 1 : -1;
+
+  const direction =
+    wind >= 0 ? 1 : -1;
 
   const windDivider =
     state.map.windRange > 0
       ? state.map.windRange * 22
       : 1;
 
-  const strength = Math.min(
-    1,
-    Math.abs(wind) / windDivider
-  );
+  const strength =
+    Math.min(
+      1,
+      Math.abs(wind) /
+        windDivider
+    );
 
   ctx.save();
 
   ctx.globalAlpha = 0.92;
+
   ctx.fillStyle =
     "rgba(10,14,26,0.6)";
 
@@ -725,10 +892,11 @@ function drawWindIndicator(
 
   ctx.font = "bold 12px Arial";
 
-  const arrowCount = Math.max(
-    1,
-    Math.round(strength * 3)
-  );
+  const arrowCount =
+    Math.max(
+      1,
+      Math.round(strength * 3)
+    );
 
   const arrows =
     direction > 0
@@ -753,7 +921,8 @@ function getVisualFacing(
   state: GameState,
   id: PlayerId
 ): 1 | -1 {
-  const player = state.players[id];
+  const player =
+    state.players[id];
 
   const opponent =
     state.players[
@@ -774,18 +943,22 @@ function getVisualFacing(
 function drawPlayer(
   ctx: CanvasRenderingContext2D,
   state: GameState,
-  id: PlayerId
+  id: PlayerId,
+  aim: AimState
 ) {
-  const player = state.players[id];
+  const player =
+    state.players[id];
 
-  const archetype = archetypeById(
-    player.archetype
-  );
+  const archetype =
+    archetypeById(
+      player.archetype
+    );
 
-  const feetY = playerFeetY(
-    state,
-    id
-  );
+  const feetY =
+    playerFeetY(
+      state,
+      id
+    );
 
   const isActive =
     state.turn === id &&
@@ -799,15 +972,19 @@ function drawPlayer(
     state.elapsed <
       player.attackPoseUntil;
 
-  const image = getWarriorSheet(
-    player.archetype
-  );
-
-  const imageReady =
-    isImageReady(image);
-
   const visualFacing =
-    getVisualFacing(state, id);
+    getVisualFacing(
+      state,
+      id
+    );
+
+  const breathing =
+    Math.sin(
+      frameClock * 3.2 +
+        (id === "p2"
+          ? Math.PI
+          : 0)
+    );
 
   let bobY = 0;
 
@@ -817,20 +994,109 @@ function drawPlayer(
     !isDefeated
   ) {
     bobY =
-      Math.sin(frameClock * 6) *
-      1.6;
+      Math.sin(
+        frameClock * 6
+      ) * 1.6;
   }
 
+  drawPlayerShadow(
+    ctx,
+    player.x,
+    feetY,
+    isDefeated
+  );
+
+  const useVikingRig =
+    player.archetype ===
+      VIKING_RIG_ID &&
+    isCharacterRigReady(
+      VIKING_RIG_ID
+    );
+
+  if (useVikingRig) {
+    ctx.save();
+
+    if (
+      isActive &&
+      !isDefeated
+    ) {
+      ctx.shadowColor =
+        archetype.accentColor;
+
+      ctx.shadowBlur = 14;
+    }
+
+    ctx.translate(
+      player.x,
+      feetY +
+        2 +
+        bobY
+    );
+
+    if (visualFacing === -1) {
+      ctx.scale(-1, 1);
+    }
+
+    drawVikingCharacterRig(
+      ctx,
+      state,
+      id,
+      aim,
+      breathing
+    );
+
+    ctx.restore();
+  } else {
+    drawLegacyPlayerSprite(
+      ctx,
+      state,
+      id,
+      bobY,
+      visualFacing,
+      isActive,
+      isDefeated,
+      isAttacking
+    );
+  }
+
+  drawPlayerStatusEffects(
+    ctx,
+    state,
+    id,
+    feetY,
+    bobY,
+    isDefeated
+  );
+
+  drawPlayerHealthBar(
+    ctx,
+    state,
+    id,
+    feetY,
+    bobY,
+    useVikingRig
+  );
+}
+
+function drawPlayerShadow(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  feetY: number,
+  isDefeated: boolean
+) {
   ctx.save();
 
   ctx.globalAlpha =
-    isDefeated ? 0.18 : 0.35;
+    isDefeated
+      ? 0.18
+      : 0.35;
 
   ctx.fillStyle = "#000000";
+
   ctx.beginPath();
 
   ctx.ellipse(
-    player.x,
+    x,
     feetY + 2,
     SPRITE_DRAW_SIZE * 0.28,
     5,
@@ -841,10 +1107,46 @@ function drawPlayer(
 
   ctx.fill();
   ctx.restore();
+}
+
+function drawLegacyPlayerSprite(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  id: PlayerId,
+  bobY: number,
+  visualFacing: 1 | -1,
+  isActive: boolean,
+  isDefeated: boolean,
+  isAttacking: boolean
+) {
+  const player =
+    state.players[id];
+
+  const archetype =
+    archetypeById(
+      player.archetype
+    );
+
+  const feetY =
+    playerFeetY(
+      state,
+      id
+    );
+
+  const image =
+    getWarriorSheet(
+      player.archetype
+    );
+
+  const imageReady =
+    isImageReady(image);
 
   ctx.save();
 
-  if (isActive && !isDefeated) {
+  if (
+    isActive &&
+    !isDefeated
+  ) {
     ctx.shadowColor =
       archetype.accentColor;
 
@@ -866,9 +1168,10 @@ function drawPlayer(
     const attackMotion =
       Math.sin(
         clamp(
-          (player.attackPoseUntil -
-            state.elapsed) *
-            16,
+          (
+            player.attackPoseUntil -
+            state.elapsed
+          ) * 16,
           0,
           Math.PI
         )
@@ -884,35 +1187,63 @@ function drawPlayer(
     );
   }
 
-  if (imageReady) {
-    const manifest = getManifest();
-    const configuredFrameSize = manifest?.warriorFrameSize ?? 256;
+  if (
+    imageReady &&
+    image
+  ) {
+    const manifest =
+      getManifest();
+
+    const configuredFrameSize =
+      manifest?.warriorFrameSize ??
+      256;
 
     const isThreeFrameSheet =
-      image.naturalWidth >= image.naturalHeight * 2.9 &&
-      image.naturalWidth <= image.naturalHeight * 3.1;
+      image.naturalWidth >=
+        image.naturalHeight *
+          2.9 &&
+      image.naturalWidth <=
+        image.naturalHeight *
+          3.1;
 
     const frameIndex =
       player.hp <= 0
         ? 2
-        : state.elapsed < player.attackPoseUntil
+        : state.elapsed <
+            player.attackPoseUntil
           ? 1
           : 0;
 
-    let frameWidth = configuredFrameSize;
-    let frameHeight = image.naturalHeight;
-    let finalFrameIndex = frameIndex;
+    let frameWidth =
+      configuredFrameSize;
+
+    let frameHeight =
+      image.naturalHeight;
+
+    let finalFrameIndex =
+      frameIndex;
 
     if (isThreeFrameSheet) {
-      frameWidth = Math.floor(image.naturalWidth / 3);
-      frameHeight = image.naturalHeight;
+      frameWidth =
+        Math.floor(
+          image.naturalWidth / 3
+        );
+
+      frameHeight =
+        image.naturalHeight;
     } else {
-      frameWidth = image.naturalWidth;
-      frameHeight = image.naturalHeight;
+      frameWidth =
+        image.naturalWidth;
+
+      frameHeight =
+        image.naturalHeight;
+
       finalFrameIndex = 0;
     }
 
-    const sourceX = finalFrameIndex * frameWidth;
+    const sourceX =
+      finalFrameIndex *
+      frameWidth;
 
     ctx.drawImage(
       image,
@@ -956,11 +1287,641 @@ function drawPlayer(
     );
 
     ctx.fill();
-
     ctx.restore();
   }
 
   ctx.restore();
+}
+
+function drawVikingCharacterRig(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  id: PlayerId,
+  aim: AimState,
+  breathing: number
+) {
+  const player =
+    state.players[id];
+
+  const isDefeated =
+    player.hp <= 0;
+
+  const isActive =
+    state.turn === id &&
+    state.phase !== "gameOver";
+
+  const isAiming =
+    isActive &&
+    state.phase === "aiming";
+
+  const isAttacking =
+    state.elapsed <
+    player.attackPoseUntil;
+
+  let defeatProgress = 0;
+
+  if (isDefeated) {
+    defeatProgress = 1;
+  }
+
+  let attackProgress = 0;
+
+  if (isAttacking) {
+    const remaining =
+      player.attackPoseUntil -
+      state.elapsed;
+
+    attackProgress =
+      clamp(
+        1 -
+          remaining / 0.45,
+        0,
+        1
+      );
+  }
+
+  const attackSwing =
+    isAttacking
+      ? Math.sin(
+          attackProgress *
+            Math.PI
+        )
+      : 0;
+
+  let aimAngle = -0.25;
+
+  if (
+    isAiming &&
+    aim.active
+  ) {
+    aimAngle =
+      clamp(
+        Math.atan2(
+          aim.dragY,
+          Math.max(
+            1,
+            Math.abs(aim.dragX)
+          )
+        ),
+        -1.25,
+        0.45
+      );
+  }
+
+  const bodyBreath =
+    isDefeated
+      ? 0
+      : breathing * 0.7;
+
+  const capeMotion =
+    isDefeated
+      ? 0
+      : Math.sin(
+          frameClock * 2.3
+        ) * 0.045;
+
+  const headMotion =
+    isDefeated
+      ? 0
+      : Math.sin(
+          frameClock * 1.7
+        ) * 0.018;
+
+  ctx.save();
+
+  if (isDefeated) {
+    ctx.globalAlpha = 0.58;
+    ctx.translate(0, -7);
+    ctx.rotate(-1.33);
+    ctx.translate(-12, 4);
+  } else {
+    ctx.translate(
+      attackSwing * 4,
+      -attackSwing * 2
+    );
+
+    ctx.rotate(
+      -attackSwing * 0.05
+    );
+  }
+
+  const rigScale =
+    VIKING_RIG_HEIGHT / 112;
+
+  ctx.scale(
+    rigScale,
+    rigScale
+  );
+
+  // Cape behind the body.
+  drawRigPart(
+    ctx,
+    "cape",
+    -7,
+    -79 + bodyBreath * 0.2,
+    48,
+    74,
+    0.42,
+    0.08,
+    capeMotion -
+      attackSwing * 0.05,
+    0.96
+  );
+
+  // Back leg.
+  drawLegChain(
+    ctx,
+    "right",
+    8,
+    -41,
+    breathing,
+    isDefeated
+  );
+
+  // Front leg.
+  drawLegChain(
+    ctx,
+    "left",
+    -10,
+    -41,
+    -breathing,
+    isDefeated
+  );
+
+  // Pelvis.
+  drawRigPart(
+    ctx,
+    "pelvis",
+    0,
+    -45,
+    34,
+    25,
+    0.5,
+    0.28,
+    breathing * 0.01
+  );
+
+  // Torso skin underneath armor.
+  drawRigPart(
+    ctx,
+    "torso_skin",
+    0,
+    -68 + bodyBreath * 0.3,
+    39,
+    42,
+    0.5,
+    0.54,
+    0
+  );
+
+  // Torso armor.
+  drawRigPart(
+    ctx,
+    "torso_armor",
+    0,
+    -67 + bodyBreath * 0.3,
+    47,
+    44,
+    0.5,
+    0.5,
+    breathing * 0.006
+  );
+
+  // Back shoulder and shield arm.
+  drawRigPart(
+    ctx,
+    "shoulder_right",
+    -14,
+    -76 + bodyBreath * 0.3,
+    22,
+    23,
+    0.5,
+    0.42,
+    -0.1
+  );
+
+  drawArmChain(
+    ctx,
+    "right",
+    -15,
+    -73 + bodyBreath * 0.3,
+    0.23,
+    -0.14,
+    attackSwing,
+    false
+  );
+
+  drawRigPart(
+    ctx,
+    "shield",
+    -24,
+    -57,
+    37,
+    48,
+    0.5,
+    0.5,
+    -0.14,
+    0.96
+  );
+
+  // Front shoulder.
+  drawRigPart(
+    ctx,
+    "shoulder_left",
+    15,
+    -76 + bodyBreath * 0.3,
+    21,
+    24,
+    0.5,
+    0.42,
+    0.08
+  );
+
+  // Weapon arm.
+  drawWeaponArm(
+    ctx,
+    15,
+    -73 + bodyBreath * 0.3,
+    aimAngle,
+    attackSwing
+  );
+
+  // Hair behind the head.
+  drawRigPart(
+    ctx,
+    "hair_back",
+    -3,
+    -94 + bodyBreath * 0.25,
+    27,
+    34,
+    0.5,
+    0.5,
+    headMotion -
+      capeMotion * 0.2
+  );
+
+  // Head.
+  drawRigPart(
+    ctx,
+    "head",
+    1,
+    -94 + bodyBreath * 0.25,
+    27,
+    37,
+    0.5,
+    0.55,
+    headMotion
+  );
+
+  // Beard.
+  drawRigPart(
+    ctx,
+    "beard",
+    4,
+    -87 + bodyBreath * 0.25,
+    19,
+    34,
+    0.5,
+    0.42,
+    headMotion * 1.2
+  );
+
+  // Helmet.
+  drawRigPart(
+    ctx,
+    "helmet",
+    0,
+    -101 + bodyBreath * 0.25,
+    31,
+    34,
+    0.5,
+    0.54,
+    headMotion
+  );
+
+  ctx.restore();
+}
+
+function drawLegChain(
+  ctx: CanvasRenderingContext2D,
+  side: "left" | "right",
+  hipX: number,
+  hipY: number,
+  breathing: number,
+  isDefeated: boolean
+) {
+  const upperName =
+    side === "left"
+      ? "upper_leg_left"
+      : "upper_leg_right";
+
+  const lowerName =
+    side === "left"
+      ? "lower_leg_left"
+      : "lower_leg_right";
+
+  const bootName =
+    side === "left"
+      ? "boot_left"
+      : "boot_right";
+
+  const walkMotion =
+    isDefeated
+      ? 0
+      : breathing * 0.025;
+
+  ctx.save();
+
+  ctx.translate(
+    hipX,
+    hipY
+  );
+
+  ctx.rotate(
+    side === "left"
+      ? walkMotion
+      : -walkMotion
+  );
+
+  drawRigPart(
+    ctx,
+    upperName,
+    0,
+    0,
+    17,
+    31,
+    0.5,
+    0.14,
+    0
+  );
+
+  ctx.translate(
+    side === "left"
+      ? -1
+      : 1,
+    24
+  );
+
+  ctx.rotate(
+    side === "left"
+      ? -walkMotion * 0.7
+      : walkMotion * 0.7
+  );
+
+  drawRigPart(
+    ctx,
+    lowerName,
+    0,
+    0,
+    17,
+    30,
+    0.5,
+    0.12,
+    0
+  );
+
+  ctx.translate(0, 23);
+
+  drawRigPart(
+    ctx,
+    bootName,
+    side === "left"
+      ? 2
+      : 1,
+    0,
+    22,
+    24,
+    0.43,
+    0.2,
+    0
+  );
+
+  ctx.restore();
+}
+
+function drawArmChain(
+  ctx: CanvasRenderingContext2D,
+  side: "left" | "right",
+  shoulderX: number,
+  shoulderY: number,
+  upperRotation: number,
+  forearmRotation: number,
+  attackSwing: number,
+  weaponArm: boolean
+) {
+  const upperName =
+    side === "left"
+      ? "upper_arm_left"
+      : "upper_arm_right";
+
+  const forearmName =
+    side === "left"
+      ? "forearm_left"
+      : "forearm_right";
+
+  const handName =
+    side === "left"
+      ? "hand_left"
+      : "hand_right";
+
+  ctx.save();
+
+  ctx.translate(
+    shoulderX,
+    shoulderY
+  );
+
+  ctx.rotate(
+    upperRotation -
+      attackSwing *
+        (weaponArm ? 0.8 : 0.05)
+  );
+
+  drawRigPart(
+    ctx,
+    upperName,
+    0,
+    0,
+    14,
+    28,
+    0.5,
+    0.13,
+    0
+  );
+
+  ctx.translate(0, 21);
+
+  ctx.rotate(
+    forearmRotation -
+      attackSwing *
+        (weaponArm ? 0.4 : 0.05)
+  );
+
+  drawRigPart(
+    ctx,
+    forearmName,
+    0,
+    0,
+    13,
+    27,
+    0.5,
+    0.12,
+    0
+  );
+
+  ctx.translate(0, 20);
+
+  drawRigPart(
+    ctx,
+    handName,
+    0,
+    0,
+    11,
+    18,
+    0.5,
+    0.18,
+    0
+  );
+
+  ctx.restore();
+}
+
+function drawWeaponArm(
+  ctx: CanvasRenderingContext2D,
+  shoulderX: number,
+  shoulderY: number,
+  aimAngle: number,
+  attackSwing: number
+) {
+  ctx.save();
+
+  ctx.translate(
+    shoulderX,
+    shoulderY
+  );
+
+  const swingRotation =
+    attackSwing > 0
+      ? -1.2 +
+        attackSwing * 2.15
+      : 0;
+
+  const armRotation =
+    aimAngle +
+    0.45 +
+    swingRotation;
+
+  ctx.rotate(armRotation);
+
+  drawRigPart(
+    ctx,
+    "upper_arm_left",
+    0,
+    0,
+    14,
+    28,
+    0.5,
+    0.13,
+    0
+  );
+
+  ctx.translate(0, 21);
+  ctx.rotate(-0.46);
+
+  drawRigPart(
+    ctx,
+    "forearm_left",
+    0,
+    0,
+    13,
+    27,
+    0.5,
+    0.12,
+    0
+  );
+
+  ctx.translate(0, 20);
+
+  drawRigPart(
+    ctx,
+    "hand_left",
+    0,
+    0,
+    11,
+    18,
+    0.5,
+    0.18,
+    0
+  );
+
+  // Axe rotates around the Viking hand.
+  drawRigPart(
+    ctx,
+    "axe",
+    2,
+    -8,
+    24,
+    58,
+    0.5,
+    0.72,
+    -0.48 +
+      attackSwing * 0.25
+  );
+
+  ctx.restore();
+}
+
+function drawRigPart(
+  ctx: CanvasRenderingContext2D,
+  partName: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  anchorX = 0.5,
+  anchorY = 0.5,
+  rotation = 0,
+  alpha = 1
+): boolean {
+  const image =
+    getCharacterRigPart(
+      VIKING_RIG_ID,
+      partName
+    );
+
+  if (!isImageReady(image)) {
+    return false;
+  }
+
+  ctx.save();
+
+  ctx.translate(x, y);
+  ctx.rotate(rotation);
+  ctx.globalAlpha *= alpha;
+
+  ctx.drawImage(
+    image,
+    -width * anchorX,
+    -height * anchorY,
+    width,
+    height
+  );
+
+  ctx.restore();
+
+  return true;
+}
+
+function drawPlayerStatusEffects(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  id: PlayerId,
+  feetY: number,
+  bobY: number,
+  isDefeated: boolean
+) {
+  const player =
+    state.players[id];
 
   if (
     player.status.shieldActive &&
@@ -968,8 +1929,9 @@ function drawPlayer(
   ) {
     const shieldPulse =
       1 +
-      Math.sin(frameClock * 5) *
-        0.025;
+      Math.sin(
+        frameClock * 5
+      ) * 0.025;
 
     ctx.save();
 
@@ -1047,6 +2009,18 @@ function drawPlayer(
 
     ctx.restore();
   }
+}
+
+function drawPlayerHealthBar(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  id: PlayerId,
+  feetY: number,
+  bobY: number,
+  usesRig: boolean
+) {
+  const player =
+    state.players[id];
 
   const healthBarWidth = 62;
 
@@ -1054,9 +2028,14 @@ function drawPlayer(
     player.x -
     healthBarWidth / 2;
 
+  const visualHeight =
+    usesRig
+      ? VIKING_RIG_HEIGHT
+      : SPRITE_DRAW_SIZE;
+
   const healthBarY =
     feetY -
-    SPRITE_DRAW_SIZE -
+    visualHeight -
     20 +
     bobY;
 
@@ -1076,13 +2055,15 @@ function drawPlayer(
 
   ctx.fill();
 
-  const healthRatio = clamp(
-    player.maxHp > 0
-      ? player.hp / player.maxHp
-      : 0,
-    0,
-    1
-  );
+  const healthRatio =
+    clamp(
+      player.maxHp > 0
+        ? player.hp /
+          player.maxHp
+        : 0,
+      0,
+      1
+    );
 
   const healthColor =
     healthRatio > 0.5
@@ -1092,7 +2073,8 @@ function drawPlayer(
         : "#f87171";
 
   if (healthRatio > 0) {
-    ctx.fillStyle = healthColor;
+    ctx.fillStyle =
+      healthColor;
 
     roundRect(
       ctx,
@@ -1116,7 +2098,8 @@ function drawWeaponIcon(
   colorMain: string,
   size: number
 ) {
-  const icon = getWeaponIcon(type);
+  const icon =
+    getWeaponIcon(type);
 
   if (isImageReady(icon)) {
     const width =
@@ -1136,13 +2119,17 @@ function drawWeaponIcon(
     let drawHeight = size;
 
     if (
-      Number.isFinite(aspectRatio) &&
+      Number.isFinite(
+        aspectRatio
+      ) &&
       aspectRatio > 1
     ) {
       drawHeight =
         size / aspectRatio;
     } else if (
-      Number.isFinite(aspectRatio) &&
+      Number.isFinite(
+        aspectRatio
+      ) &&
       aspectRatio > 0 &&
       aspectRatio < 1
     ) {
@@ -1183,10 +2170,11 @@ function drawAimGuide(
   const player =
     state.players[playerId];
 
-  const feetY = playerFeetY(
-    state,
-    playerId
-  );
+  const feetY =
+    playerFeetY(
+      state,
+      playerId
+    );
 
   const originY =
     feetY -
@@ -1195,20 +2183,27 @@ function drawAimGuide(
   const originX =
     player.x +
     player.facing *
-      (SPRITE_DRAW_SIZE * 0.22);
+      (
+        SPRITE_DRAW_SIZE *
+        0.22
+      );
 
-  const weapon = weaponById(
-    state.selectedWeapon[playerId]
-  );
+  const weapon =
+    weaponById(
+      state.selectedWeapon[
+        playerId
+      ]
+    );
 
-  const powerRatio = clamp(
-    Math.hypot(
-      aim.dragX,
-      aim.dragY
-    ) / MAX_DRAG,
-    0,
-    1
-  );
+  const powerRatio =
+    clamp(
+      Math.hypot(
+        aim.dragX,
+        aim.dragY
+      ) / MAX_DRAG,
+      0,
+      1
+    );
 
   ctx.save();
 
@@ -1231,16 +2226,17 @@ function drawAimGuide(
 
   ctx.stroke();
 
-  const angle = clamp(
-    Math.atan2(
-      -aim.dragY,
-      Math.abs(aim.dragX) < 1
-        ? 1
-        : Math.abs(aim.dragX)
-    ),
-    (5 * Math.PI) / 180,
-    (85 * Math.PI) / 180
-  );
+  const angle =
+    clamp(
+      Math.atan2(
+        -aim.dragY,
+        Math.abs(aim.dragX) < 1
+          ? 1
+          : Math.abs(aim.dragX)
+      ),
+      (5 * Math.PI) / 180,
+      (85 * Math.PI) / 180
+    );
 
   const speed =
     powerRatio *
@@ -1257,17 +2253,18 @@ function drawAimGuide(
     -Math.sin(angle) *
     speed;
 
-  const points = simulateTrajectory(
-    originX,
-    originY,
-    velocityX,
-    velocityY,
-    state.wind,
-    weapon.gravityScale,
-    state.terrain,
-    26,
-    1 / 60
-  );
+  const points =
+    simulateTrajectory(
+      originX,
+      originY,
+      velocityX,
+      velocityY,
+      state.wind,
+      weapon.gravityScale,
+      state.terrain,
+      26,
+      1 / 60
+    );
 
   ctx.fillStyle =
     "rgba(255,255,255,0.7)";
@@ -1285,7 +2282,8 @@ function drawAimGuide(
       1 - i / points.length;
 
     ctx.globalAlpha =
-      0.25 + trailFade * 0.55;
+      0.25 +
+      trailFade * 0.55;
 
     ctx.beginPath();
 
@@ -1311,8 +2309,9 @@ function drawAimGuide(
   ctx.textAlign = "center";
 
   ctx.fillText(
-    Math.round(powerRatio * 100) +
-      "%",
+    Math.round(
+      powerRatio * 100
+    ) + "%",
     originX,
     originY - 26
   );
@@ -1339,9 +2338,10 @@ function drawProjectile(
 
     ctx.globalAlpha =
       projectile.trail.length > 0
-        ? (i /
-            projectile.trail.length) *
-          0.45
+        ? (
+            i /
+            projectile.trail.length
+          ) * 0.45
         : 0;
 
     ctx.fillStyle =
@@ -1368,14 +2368,19 @@ function drawProjectile(
   );
 
   if (
-    projectile.weapon.type === "axe" ||
+    projectile.weapon.type ===
+      "axe" ||
     projectile.weapon.type ===
       "shuriken"
   ) {
     ctx.rotate(
       frameClock *
         22 *
-        (projectile.vx >= 0 ? 1 : -1)
+        (
+          projectile.vx >= 0
+            ? 1
+            : -1
+        )
     );
   } else {
     ctx.rotate(
@@ -1402,14 +2407,19 @@ function drawParticles(
 ) {
   ctx.save();
 
-  for (const particle of state.particles) {
-    ctx.globalAlpha = Math.max(
-      0,
-      particle.life /
-        particle.maxLife
-    );
+  for (
+    const particle of
+    state.particles
+  ) {
+    ctx.globalAlpha =
+      Math.max(
+        0,
+        particle.life /
+          particle.maxLife
+      );
 
-    ctx.fillStyle = particle.color;
+    ctx.fillStyle =
+      particle.color;
 
     ctx.beginPath();
 
@@ -1437,11 +2447,18 @@ function drawFloaters(
   ctx.font = "bold 15px Arial";
   ctx.textAlign = "center";
 
-  for (const floater of state.floaters) {
-    ctx.globalAlpha = Math.max(
-      0,
-      Math.min(1, floater.life)
-    );
+  for (
+    const floater of
+    state.floaters
+  ) {
+    ctx.globalAlpha =
+      Math.max(
+        0,
+        Math.min(
+          1,
+          floater.life
+        )
+      );
 
     ctx.fillStyle =
       floater.color;
@@ -1465,14 +2482,15 @@ function roundRect(
   height: number,
   radius: number
 ) {
-  const safeRadius = Math.max(
-    0,
-    Math.min(
-      radius,
-      Math.abs(width) / 2,
-      Math.abs(height) / 2
-    )
-  );
+  const safeRadius =
+    Math.max(
+      0,
+      Math.min(
+        radius,
+        Math.abs(width) / 2,
+        Math.abs(height) / 2
+      )
+    );
 
   ctx.beginPath();
 
