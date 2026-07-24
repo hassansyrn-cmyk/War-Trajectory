@@ -1,9 +1,4 @@
-import {
-  PlayerId,
-  WeaponDef,
-  archetypeById,
-} from "./entities";
-
+import { PlayerId, WeaponDef, archetypeById } from "./entities";
 import {
   Camera,
   GameState,
@@ -14,7 +9,6 @@ import {
   playerFeetY,
   weaponById,
 } from "./engine";
-
 import {
   TERRAIN_SAMPLES,
   WORLD_HEIGHT,
@@ -22,14 +16,13 @@ import {
   clamp,
   simulateTrajectory,
 } from "./physics";
-
 import {
-  getCharacterRigPart,
   getManifest,
+  getSimpleVikingPart,
   getTerrainSprite,
   getWarriorSheet,
   getWeaponIcon,
-  isCharacterRigReady,
+  isSimpleVikingReady,
 } from "./assets";
 
 export interface AimState {
@@ -38,14 +31,10 @@ export interface AimState {
   dragY: number;
 }
 
-// Visual drawing size only.
-// PLAYER_HEIGHT and PLAYER_WIDTH remain dedicated to gameplay collision math.
 const SPRITE_DRAW_SIZE = 108;
 const WEAPON_ICON_SIZE = 30;
-
-const VIKING_RIG_ID = "viking";
-const VIKING_RIG_HEIGHT = 112;
-
+const SIMPLE_VIKING_HEIGHT = 116;
+const SIMPLE_VIKING_WIDTH = 66;
 let frameClock = 0;
 
 export function draw(
@@ -57,621 +46,177 @@ export function draw(
   offsetY: number
 ) {
   frameClock += 1 / 60;
-
   ctx.save();
   ctx.translate(offsetX, offsetY);
   ctx.scale(scale, scale);
-
   drawSky(ctx, state);
   drawParallaxLayers(ctx, state);
-
   ctx.save();
   applyCamera(ctx, state.camera);
-
   drawTerrain(ctx, state);
   drawDecorations(ctx, state);
-
   const activePlayer = state.players[state.turn];
-
   drawPlayer(ctx, state, "p1", aim);
   drawPlayer(ctx, state, "p2", aim);
-
-  if (
-    aim.active &&
-    state.phase === "aiming"
-  ) {
-    drawAimGuide(
-      ctx,
-      state,
-      activePlayer.id,
-      aim
-    );
+  if (aim.active && state.phase === "aiming") {
+    drawAimGuide(ctx, state, activePlayer.id, aim);
   }
-
-  if (state.projectile) {
-    drawProjectile(ctx, state);
-  }
-
+  if (state.projectile) drawProjectile(ctx, state);
   drawParticles(ctx, state);
   drawFloaters(ctx, state);
-
   ctx.restore();
-
   drawWindIndicator(ctx, state);
-
   ctx.restore();
 }
 
-function applyCamera(
-  ctx: CanvasRenderingContext2D,
-  cam: Camera
-) {
-  ctx.translate(
-    WORLD_WIDTH / 2,
-    WORLD_HEIGHT / 2
-  );
-
+function applyCamera(ctx: CanvasRenderingContext2D, cam: Camera) {
+  ctx.translate(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
   ctx.scale(cam.zoom, cam.zoom);
-
-  ctx.translate(
-    -cam.x,
-    -cam.y
-  );
+  ctx.translate(-cam.x, -cam.y);
 }
 
-function drawSky(
-  ctx: CanvasRenderingContext2D,
-  state: GameState
-) {
-  const gradient =
-    ctx.createLinearGradient(
-      0,
-      0,
-      0,
-      WORLD_HEIGHT
-    );
-
-  gradient.addColorStop(
-    0,
-    state.map.skyTop
-  );
-
-  gradient.addColorStop(
-    1,
-    state.map.skyBottom
-  );
-
+function drawSky(ctx: CanvasRenderingContext2D, state: GameState) {
+  const gradient = ctx.createLinearGradient(0, 0, 0, WORLD_HEIGHT);
+  gradient.addColorStop(0, state.map.skyTop);
+  gradient.addColorStop(1, state.map.skyBottom);
   ctx.fillStyle = gradient;
-
-  ctx.fillRect(
-    0,
-    0,
-    WORLD_WIDTH,
-    WORLD_HEIGHT
-  );
-
+  ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
   ctx.save();
-
   const sunX = WORLD_WIDTH * 0.8;
   const sunY = WORLD_HEIGHT * 0.16;
-
-  const glow =
-    ctx.createRadialGradient(
-      sunX,
-      sunY,
-      4,
-      sunX,
-      sunY,
-      70
-    );
-
-  glow.addColorStop(
-    0,
-    state.map.accentGlow
-  );
-
-  glow.addColorStop(
-    1,
-    "rgba(255,255,255,0)"
-  );
-
+  const glow = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, 70);
+  glow.addColorStop(0, state.map.accentGlow);
+  glow.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = glow;
   ctx.beginPath();
-  ctx.arc(
-    sunX,
-    sunY,
-    70,
-    0,
-    Math.PI * 2
-  );
+  ctx.arc(sunX, sunY, 70, 0, Math.PI * 2);
   ctx.fill();
-
   ctx.globalAlpha = 0.95;
   ctx.fillStyle = "#fff7e0";
   ctx.beginPath();
-  ctx.arc(
-    sunX,
-    sunY,
-    22,
-    0,
-    Math.PI * 2
-  );
+  ctx.arc(sunX, sunY, 22, 0, Math.PI * 2);
   ctx.fill();
-
   ctx.restore();
-
   ctx.save();
-
-  ctx.fillStyle =
-    state.map.cloudColor;
-
-  const cloudSeed =
-    hashMap(state.map.id);
-
+  ctx.fillStyle = state.map.cloudColor;
+  const cloudSeed = hashMap(state.map.id);
   for (let i = 0; i < 5; i++) {
-    const t =
-      (
-        (
-          cloudSeed +
-          i * 137 +
-          frameClock * 3
-        ) %
-        1000
-      ) / 1000;
-
-    const cloudX =
-      t * (WORLD_WIDTH + 260) - 130;
-
-    const cloudY =
-      WORLD_HEIGHT *
-      (
-        0.08 +
-        (
-          ((i * 71) % 100) /
-          100
-        ) *
-          0.16
-      );
-
-    drawCloud(
-      ctx,
-      cloudX,
-      cloudY,
-      30 + (i % 3) * 10
-    );
+    const t = ((cloudSeed + i * 137 + frameClock * 3) % 1000) / 1000;
+    const cloudX = t * (WORLD_WIDTH + 260) - 130;
+    const cloudY = WORLD_HEIGHT * (0.08 + (((i * 71) % 100) / 100) * 0.16);
+    drawCloud(ctx, cloudX, cloudY, 30 + (i % 3) * 10);
   }
-
   ctx.restore();
 }
 
-function drawCloud(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  size: number
-) {
+function drawCloud(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
   ctx.beginPath();
-
-  ctx.ellipse(
-    x,
-    y,
-    size,
-    size * 0.42,
-    0,
-    0,
-    Math.PI * 2
-  );
-
-  ctx.ellipse(
-    x + size * 0.55,
-    y + size * 0.08,
-    size * 0.62,
-    size * 0.32,
-    0,
-    0,
-    Math.PI * 2
-  );
-
-  ctx.ellipse(
-    x - size * 0.5,
-    y + size * 0.1,
-    size * 0.5,
-    size * 0.28,
-    0,
-    0,
-    Math.PI * 2
-  );
-
+  ctx.ellipse(x, y, size, size * 0.42, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + size * 0.55, y + size * 0.08, size * 0.62, size * 0.32, 0, 0, Math.PI * 2);
+  ctx.ellipse(x - size * 0.5, y + size * 0.1, size * 0.5, size * 0.28, 0, 0, Math.PI * 2);
   ctx.fill();
 }
 
 function hashMap(id: string): number {
   let hash = 0;
-
-  for (let i = 0; i < id.length; i++) {
-    hash =
-      (
-        hash * 31 +
-        id.charCodeAt(i)
-      ) >>> 0;
-  }
-
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
   return hash % 1000;
 }
 
-function drawParallaxLayers(
-  ctx: CanvasRenderingContext2D,
-  state: GameState
-) {
-  const cameraShift =
-    (
-      state.camera.x -
-      WORLD_WIDTH / 2
-    ) * -1;
-
-  drawMountainLayer(
-    ctx,
-    state.map.mountainFar,
-    WORLD_HEIGHT * 0.62,
-    WORLD_HEIGHT * 0.22,
-    cameraShift * 0.04,
-    hashMap(state.map.id + "far")
-  );
-
-  drawMountainLayer(
-    ctx,
-    state.map.mountainNear,
-    WORLD_HEIGHT * 0.72,
-    WORLD_HEIGHT * 0.16,
-    cameraShift * 0.09,
-    hashMap(state.map.id + "near")
-  );
+function drawParallaxLayers(ctx: CanvasRenderingContext2D, state: GameState) {
+  const cameraShift = (state.camera.x - WORLD_WIDTH / 2) * -1;
+  drawMountainLayer(ctx, state.map.mountainFar, WORLD_HEIGHT * 0.62, WORLD_HEIGHT * 0.22, cameraShift * 0.04, hashMap(state.map.id + "far"));
+  drawMountainLayer(ctx, state.map.mountainNear, WORLD_HEIGHT * 0.72, WORLD_HEIGHT * 0.16, cameraShift * 0.09, hashMap(state.map.id + "near"));
 }
 
-function drawMountainLayer(
-  ctx: CanvasRenderingContext2D,
-  color: string,
-  baseY: number,
-  amplitude: number,
-  shiftX: number,
-  seed: number
-) {
+function drawMountainLayer(ctx: CanvasRenderingContext2D, color: string, baseY: number, amplitude: number, shiftX: number, seed: number) {
   ctx.save();
-
   ctx.fillStyle = color;
   ctx.globalAlpha = 0.85;
-
   ctx.beginPath();
-
-  ctx.moveTo(
-    -40 + shiftX,
-    WORLD_HEIGHT + 4
-  );
-
+  ctx.moveTo(-40 + shiftX, WORLD_HEIGHT + 4);
   const peaks = 7;
-
-  for (
-    let i = 0;
-    i <= peaks;
-    i++
-  ) {
-    const x =
-      shiftX -
-      60 +
-      (i / peaks) *
-        (WORLD_WIDTH + 120);
-
-    const noise =
-      Math.sin(
-        i * 12.9898 + seed
-      ) * 43758.5453;
-
-    const fraction =
-      noise - Math.floor(noise);
-
-    const y =
-      baseY -
-      amplitude *
-        (
-          0.35 +
-          fraction * 0.65
-        );
-
-    ctx.lineTo(x, y);
+  for (let i = 0; i <= peaks; i++) {
+    const x = shiftX - 60 + (i / peaks) * (WORLD_WIDTH + 120);
+    const noise = Math.sin(i * 12.9898 + seed) * 43758.5453;
+    const fraction = noise - Math.floor(noise);
+    ctx.lineTo(x, baseY - amplitude * (0.35 + fraction * 0.65));
   }
-
-  ctx.lineTo(
-    WORLD_WIDTH + 40 + shiftX,
-    WORLD_HEIGHT + 4
-  );
-
+  ctx.lineTo(WORLD_WIDTH + 40 + shiftX, WORLD_HEIGHT + 4);
   ctx.closePath();
   ctx.fill();
-
   ctx.restore();
 }
 
-function terrainPoints(
-  state: GameState
-): { x: number; y: number }[] {
-  const points: {
-    x: number;
-    y: number;
-  }[] = [];
-
-  for (
-    let i = 0;
-    i < TERRAIN_SAMPLES;
-    i++
-  ) {
-    points.push({
-      x:
-        (
-          i /
-          (TERRAIN_SAMPLES - 1)
-        ) *
-        WORLD_WIDTH,
-
-      y: state.terrain[i],
-    });
+function terrainPoints(state: GameState): { x: number; y: number }[] {
+  const points: { x: number; y: number }[] = [];
+  for (let i = 0; i < TERRAIN_SAMPLES; i++) {
+    points.push({ x: (i / (TERRAIN_SAMPLES - 1)) * WORLD_WIDTH, y: state.terrain[i] });
   }
-
   return points;
 }
 
-function clipToTerrainSilhouette(
-  ctx: CanvasRenderingContext2D,
-  points: {
-    x: number;
-    y: number;
-  }[]
-) {
+function clipToTerrainSilhouette(ctx: CanvasRenderingContext2D, points: { x: number; y: number }[]) {
   ctx.beginPath();
-
-  ctx.moveTo(
-    points[0].x,
-    WORLD_HEIGHT + 4
-  );
-
-  for (const point of points) {
-    ctx.lineTo(
-      point.x,
-      point.y
-    );
-  }
-
-  ctx.lineTo(
-    points[points.length - 1].x,
-    WORLD_HEIGHT + 4
-  );
-
+  ctx.moveTo(points[0].x, WORLD_HEIGHT + 4);
+  for (const point of points) ctx.lineTo(point.x, point.y);
+  ctx.lineTo(points[points.length - 1].x, WORLD_HEIGHT + 4);
   ctx.closePath();
   ctx.clip();
 }
 
-function isImageReady(
-  image: HTMLImageElement | undefined
-): image is HTMLImageElement {
-  return Boolean(
-    image &&
-      image.complete &&
-      image.naturalWidth > 0 &&
-      image.naturalHeight > 0
-  );
+function isImageReady(image: HTMLImageElement | undefined): image is HTMLImageElement {
+  return Boolean(image && image.complete && image.naturalWidth > 0 && image.naturalHeight > 0);
 }
 
-function drawTerrain(
-  ctx: CanvasRenderingContext2D,
-  state: GameState
-) {
-  const points =
-    terrainPoints(state);
-
-  const sprite =
-    getTerrainSprite(
-      state.map.terrainSprite
-    );
-
+function drawTerrain(ctx: CanvasRenderingContext2D, state: GameState) {
+  const points = terrainPoints(state);
+  const sprite = getTerrainSprite(state.map.terrainSprite);
   ctx.save();
-
-  clipToTerrainSilhouette(
-    ctx,
-    points
-  );
-
+  clipToTerrainSilhouette(ctx, points);
   if (isImageReady(sprite)) {
-    ctx.fillStyle =
-      state.map.rockColor;
-
-    ctx.fillRect(
-      0,
-      0,
-      WORLD_WIDTH,
-      WORLD_HEIGHT + 4
-    );
-
-    const topY =
-      Math.min(...state.terrain) - 24;
-
-    const bottomY =
-      WORLD_HEIGHT + 24;
-
-    ctx.drawImage(
-      sprite,
-      0,
-      0,
-      sprite.naturalWidth,
-      sprite.naturalHeight,
-      0,
-      topY,
-      WORLD_WIDTH,
-      bottomY - topY
-    );
+    ctx.fillStyle = state.map.rockColor;
+    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT + 4);
+    const topY = Math.min(...state.terrain) - 24;
+    const bottomY = WORLD_HEIGHT + 24;
+    ctx.drawImage(sprite, 0, 0, sprite.naturalWidth, sprite.naturalHeight, 0, topY, WORLD_WIDTH, bottomY - topY);
   } else {
-    fillTerrainBand(
-      ctx,
-      points,
-      WORLD_HEIGHT + 4,
-      state.map.rockColor,
-      0
-    );
-
-    fillTerrainBand(
-      ctx,
-      points,
-      WORLD_HEIGHT + 4,
-      state.map.soilColor,
-      16
-    );
-
-    const gradient =
-      ctx.createLinearGradient(
-        0,
-        WORLD_HEIGHT * 0.4,
-        0,
-        WORLD_HEIGHT * 0.4 + 30
-      );
-
-    gradient.addColorStop(
-      0,
-      state.map.groundTop
-    );
-
-    gradient.addColorStop(
-      1,
-      state.map.groundBottom
-    );
-
-    fillTerrainBand(
-      ctx,
-      points,
-      WORLD_HEIGHT + 4,
-      gradient,
-      0,
-      10
-    );
+    fillTerrainBand(ctx, points, WORLD_HEIGHT + 4, state.map.rockColor, 0);
+    fillTerrainBand(ctx, points, WORLD_HEIGHT + 4, state.map.soilColor, 16);
+    const gradient = ctx.createLinearGradient(0, WORLD_HEIGHT * 0.4, 0, WORLD_HEIGHT * 0.4 + 30);
+    gradient.addColorStop(0, state.map.groundTop);
+    gradient.addColorStop(1, state.map.groundBottom);
+    fillTerrainBand(ctx, points, WORLD_HEIGHT + 4, gradient, 0, 10);
   }
-
   ctx.restore();
-
   ctx.beginPath();
-
-  points.forEach(
-    (point, index) => {
-      if (index === 0) {
-        ctx.moveTo(
-          point.x,
-          point.y
-        );
-      } else {
-        ctx.lineTo(
-          point.x,
-          point.y
-        );
-      }
-    }
-  );
-
-  ctx.strokeStyle =
-    "rgba(255,255,255,0.22)";
-
+  points.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
   ctx.lineWidth = 2;
   ctx.stroke();
-
   ctx.beginPath();
-
-  points.forEach(
-    (point, index) => {
-      if (index === 0) {
-        ctx.moveTo(
-          point.x,
-          point.y + 1.5
-        );
-      } else {
-        ctx.lineTo(
-          point.x,
-          point.y + 1.5
-        );
-      }
-    }
-  );
-
-  ctx.strokeStyle =
-    "rgba(0,0,0,0.28)";
-
+  points.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y + 1.5) : ctx.lineTo(point.x, point.y + 1.5));
+  ctx.strokeStyle = "rgba(0,0,0,0.28)";
   ctx.lineWidth = 2;
   ctx.stroke();
 }
 
-function fillTerrainBand(
-  ctx: CanvasRenderingContext2D,
-  points: {
-    x: number;
-    y: number;
-  }[],
-  bottomY: number,
-  fill: string | CanvasGradient,
-  yOffset: number,
-  onlyTopThickness = 0
-) {
+function fillTerrainBand(ctx: CanvasRenderingContext2D, points: { x: number; y: number }[], bottomY: number, fill: string | CanvasGradient, yOffset: number, onlyTopThickness = 0) {
   ctx.beginPath();
-
-  ctx.moveTo(
-    points[0].x,
-    bottomY
-  );
-
-  for (const point of points) {
-    ctx.lineTo(
-      point.x,
-      point.y + yOffset
-    );
-  }
-
-  ctx.lineTo(
-    points[points.length - 1].x,
-    bottomY
-  );
-
+  ctx.moveTo(points[0].x, bottomY);
+  for (const point of points) ctx.lineTo(point.x, point.y + yOffset);
+  ctx.lineTo(points[points.length - 1].x, bottomY);
   ctx.closePath();
-
   if (onlyTopThickness > 0) {
     ctx.save();
     ctx.clip();
-
     ctx.beginPath();
-
-    ctx.moveTo(
-      points[0].x,
-      points[0].y +
-        onlyTopThickness +
-        40
-    );
-
-    for (const point of points) {
-      ctx.lineTo(
-        point.x,
-        point.y +
-          onlyTopThickness +
-          40
-      );
-    }
-
-    for (
-      let i = points.length - 1;
-      i >= 0;
-      i--
-    ) {
-      ctx.lineTo(
-        points[i].x,
-        points[i].y - 4
-      );
-    }
-
+    ctx.moveTo(points[0].x, points[0].y + onlyTopThickness + 40);
+    for (const point of points) ctx.lineTo(point.x, point.y + onlyTopThickness + 40);
+    for (let i = points.length - 1; i >= 0; i--) ctx.lineTo(points[i].x, points[i].y - 4);
     ctx.closePath();
     ctx.fillStyle = fill;
     ctx.fill();
-
     ctx.restore();
   } else {
     ctx.fillStyle = fill;
@@ -679,1857 +224,392 @@ function fillTerrainBand(
   }
 }
 
-function drawDecorations(
-  ctx: CanvasRenderingContext2D,
-  state: GameState
-) {
-  for (
-    const decoration of
-    state.decorations
-  ) {
-    const terrainY =
-      sampleTerrainY(
-        state.terrain,
-        decoration.x
-      );
-
+function drawDecorations(ctx: CanvasRenderingContext2D, state: GameState) {
+  for (const decoration of state.decorations) {
+    const terrainY = sampleTerrainY(state.terrain, decoration.x);
     ctx.save();
-
-    ctx.translate(
-      decoration.x,
-      terrainY
-    );
-
-    if (decoration.flip) {
-      ctx.scale(-1, 1);
-    }
-
-    ctx.fillStyle =
-      state.map.decoColor;
-
-    if (
-      decoration.type === "grass"
-    ) {
-      const size =
-        6 * decoration.size;
-
-      for (
-        let i = -1;
-        i <= 1;
-        i++
-      ) {
+    ctx.translate(decoration.x, terrainY);
+    if (decoration.flip) ctx.scale(-1, 1);
+    ctx.fillStyle = state.map.decoColor;
+    if (decoration.type === "grass") {
+      const size = 6 * decoration.size;
+      for (let i = -1; i <= 1; i++) {
         ctx.beginPath();
-
-        ctx.moveTo(
-          i * size * 0.6,
-          2
-        );
-
-        ctx.quadraticCurveTo(
-          i * size * 0.6 +
-            size * 0.3,
-          -size * 0.6,
-          i * size * 0.3,
-          -size
-        );
-
-        ctx.lineTo(
-          i * size * 0.15,
-          2
-        );
-
+        ctx.moveTo(i * size * 0.6, 2);
+        ctx.quadraticCurveTo(i * size * 0.6 + size * 0.3, -size * 0.6, i * size * 0.3, -size);
+        ctx.lineTo(i * size * 0.15, 2);
         ctx.closePath();
         ctx.fill();
       }
-    } else if (
-      decoration.type === "rock"
-    ) {
-      const size =
-        7 * decoration.size;
-
+    } else if (decoration.type === "rock") {
+      const size = 7 * decoration.size;
       ctx.beginPath();
       ctx.moveTo(-size, 2);
-
-      ctx.lineTo(
-        -size * 0.6,
-        -size * 0.7
-      );
-
-      ctx.lineTo(
-        size * 0.2,
-        -size * 0.9
-      );
-
-      ctx.lineTo(
-        size,
-        -size * 0.1
-      );
-
-      ctx.lineTo(
-        size * 0.7,
-        2
-      );
-
+      ctx.lineTo(-size * 0.6, -size * 0.7);
+      ctx.lineTo(size * 0.2, -size * 0.9);
+      ctx.lineTo(size, -size * 0.1);
+      ctx.lineTo(size * 0.7, 2);
       ctx.closePath();
       ctx.fill();
-
-      ctx.strokeStyle =
-        "rgba(0,0,0,0.2)";
-
+      ctx.strokeStyle = "rgba(0,0,0,0.2)";
       ctx.lineWidth = 1;
       ctx.stroke();
     } else {
-      const size =
-        8 * decoration.size;
-
+      const size = 8 * decoration.size;
       ctx.beginPath();
-
-      ctx.ellipse(
-        0,
-        -size * 0.4,
-        size,
-        size * 0.62,
-        0,
-        0,
-        Math.PI * 2
-      );
-
+      ctx.ellipse(0, -size * 0.4, size, size * 0.62, 0, 0, Math.PI * 2);
       ctx.fill();
     }
-
     ctx.restore();
   }
 }
 
-function sampleTerrainY(
-  terrain: number[],
-  x: number
-): number {
-  const normalizedX =
-    clamp(
-      x / WORLD_WIDTH,
-      0,
-      0.999999
-    );
-
-  const index =
-    normalizedX *
-    (TERRAIN_SAMPLES - 1);
-
-  const lowerIndex =
-    Math.floor(index);
-
-  const upperIndex =
-    Math.min(
-      lowerIndex + 1,
-      TERRAIN_SAMPLES - 1
-    );
-
-  const fraction =
-    index - lowerIndex;
-
-  return (
-    terrain[lowerIndex] *
-      (1 - fraction) +
-    terrain[upperIndex] *
-      fraction
-  );
+function sampleTerrainY(terrain: number[], x: number): number {
+  const normalizedX = clamp(x / WORLD_WIDTH, 0, 0.999999);
+  const index = normalizedX * (TERRAIN_SAMPLES - 1);
+  const lowerIndex = Math.floor(index);
+  const upperIndex = Math.min(lowerIndex + 1, TERRAIN_SAMPLES - 1);
+  const fraction = index - lowerIndex;
+  return terrain[lowerIndex] * (1 - fraction) + terrain[upperIndex] * fraction;
 }
 
-function drawWindIndicator(
-  ctx: CanvasRenderingContext2D,
-  state: GameState
-) {
-  const centerX =
-    WORLD_WIDTH / 2;
-
+function drawWindIndicator(ctx: CanvasRenderingContext2D, state: GameState) {
+  const centerX = WORLD_WIDTH / 2;
   const centerY = 24;
   const wind = state.wind;
-
-  const direction =
-    wind >= 0 ? 1 : -1;
-
-  const windDivider =
-    state.map.windRange > 0
-      ? state.map.windRange * 22
-      : 1;
-
-  const strength =
-    Math.min(
-      1,
-      Math.abs(wind) /
-        windDivider
-    );
-
+  const direction = wind >= 0 ? 1 : -1;
+  const windDivider = state.map.windRange > 0 ? state.map.windRange * 22 : 1;
+  const strength = Math.min(1, Math.abs(wind) / windDivider);
   ctx.save();
-
   ctx.globalAlpha = 0.92;
-
-  ctx.fillStyle =
-    "rgba(10,14,26,0.6)";
-
-  roundRect(
-    ctx,
-    centerX - 68,
-    centerY - 15,
-    136,
-    30,
-    15
-  );
-
+  ctx.fillStyle = "rgba(10,14,26,0.6)";
+  roundRect(ctx, centerX - 68, centerY - 15, 136, 30, 15);
   ctx.fill();
-
   ctx.fillStyle = "#e8edf5";
   ctx.font = "11px Arial";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-
-  ctx.fillText(
-    "الرياح",
-    centerX,
-    centerY - 3
-  );
-
+  ctx.fillText("الرياح", centerX, centerY - 3);
   ctx.font = "bold 12px Arial";
-
-  const arrowCount =
-    Math.max(
-      1,
-      Math.round(strength * 3)
-    );
-
-  const arrows =
-    direction > 0
-      ? "→".repeat(arrowCount)
-      : "←".repeat(arrowCount);
-
-  ctx.fillStyle =
-    strength > 0.6
-      ? "#fca5a5"
-      : "#a7f3d0";
-
-  ctx.fillText(
-    arrows,
-    centerX,
-    centerY + 11
-  );
-
+  const arrowCount = Math.max(1, Math.round(strength * 3));
+  const arrows = direction > 0 ? "→".repeat(arrowCount) : "←".repeat(arrowCount);
+  ctx.fillStyle = strength > 0.6 ? "#fca5a5" : "#a7f3d0";
+  ctx.fillText(arrows, centerX, centerY + 11);
   ctx.restore();
 }
 
-function getVisualFacing(
-  state: GameState,
-  id: PlayerId
-): 1 | -1 {
-  const player =
-    state.players[id];
-
-  const opponent =
-    state.players[
-      id === "p1" ? "p2" : "p1"
-    ];
-
-  if (opponent.x > player.x) {
-    return 1;
-  }
-
-  if (opponent.x < player.x) {
-    return -1;
-  }
-
+function getVisualFacing(state: GameState, id: PlayerId): 1 | -1 {
+  const player = state.players[id];
+  const opponent = state.players[id === "p1" ? "p2" : "p1"];
+  if (opponent.x > player.x) return 1;
+  if (opponent.x < player.x) return -1;
   return player.facing;
 }
 
-function drawPlayer(
-  ctx: CanvasRenderingContext2D,
-  state: GameState,
-  id: PlayerId,
-  aim: AimState
-) {
-  const player =
-    state.players[id];
-
-  const archetype =
-    archetypeById(
-      player.archetype
-    );
-
-  const feetY =
-    playerFeetY(
-      state,
-      id
-    );
-
-  const isActive =
-    state.turn === id &&
-    state.phase !== "gameOver";
-
-  const isDefeated =
-    player.hp <= 0;
-
-  const isAttacking =
-    !isDefeated &&
-    state.elapsed <
-      player.attackPoseUntil;
-
-  const visualFacing =
-    getVisualFacing(
-      state,
-      id
-    );
-
-  const breathing =
-    Math.sin(
-      frameClock * 3.2 +
-        (id === "p2"
-          ? Math.PI
-          : 0)
-    );
-
+function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState, id: PlayerId, aim: AimState) {
+  const player = state.players[id];
+  const archetype = archetypeById(player.archetype);
+  const feetY = playerFeetY(state, id);
+  const isActive = state.turn === id && state.phase !== "gameOver";
+  const isDefeated = player.hp <= 0;
+  const isAttacking = !isDefeated && state.elapsed < player.attackPoseUntil;
+  const visualFacing = getVisualFacing(state, id);
+  const breathing = Math.sin(frameClock * 3.2 + (id === "p2" ? Math.PI : 0));
   let bobY = 0;
-
-  if (
-    isActive &&
-    state.phase === "aiming" &&
-    !isDefeated
-  ) {
-    bobY =
-      Math.sin(
-        frameClock * 6
-      ) * 1.6;
-  }
-
-  drawPlayerShadow(
-    ctx,
-    player.x,
-    feetY,
-    isDefeated
-  );
-
-  const useVikingRig =
-    player.archetype ===
-      VIKING_RIG_ID &&
-    isCharacterRigReady(
-      VIKING_RIG_ID
-    );
-
-  if (useVikingRig) {
+  if (isActive && state.phase === "aiming" && !isDefeated) bobY = Math.sin(frameClock * 6) * 1.1;
+  drawPlayerShadow(ctx, player.x, feetY, isDefeated);
+  const useSimpleViking = player.archetype === "viking" && isSimpleVikingReady();
+  if (useSimpleViking) {
     ctx.save();
-
-    if (
-      isActive &&
-      !isDefeated
-    ) {
-      ctx.shadowColor =
-        archetype.accentColor;
-
-      ctx.shadowBlur = 14;
+    if (isActive && !isDefeated) {
+      ctx.shadowColor = archetype.accentColor;
+      ctx.shadowBlur = 12;
     }
-
-    ctx.translate(
-      player.x,
-      feetY +
-        2 +
-        bobY
-    );
-
-    if (visualFacing === -1) {
-      ctx.scale(-1, 1);
-    }
-
-    drawVikingCharacterRig(
-      ctx,
-      state,
-      id,
-      aim,
-      breathing
-    );
-
+    ctx.translate(player.x, feetY + 2 + bobY);
+    if (visualFacing === -1) ctx.scale(-1, 1);
+    drawSimpleViking(ctx, state, id, aim, breathing);
     ctx.restore();
   } else {
-    drawLegacyPlayerSprite(
-      ctx,
-      state,
-      id,
-      bobY,
-      visualFacing,
-      isActive,
-      isDefeated,
-      isAttacking
-    );
+    drawLegacyPlayerSprite(ctx, state, id, bobY, visualFacing, isActive, isDefeated, isAttacking);
   }
-
-  drawPlayerStatusEffects(
-    ctx,
-    state,
-    id,
-    feetY,
-    bobY,
-    isDefeated
-  );
-
-  drawPlayerHealthBar(
-    ctx,
-    state,
-    id,
-    feetY,
-    bobY,
-    useVikingRig
-  );
+  drawPlayerStatusEffects(ctx, state, id, feetY, bobY, isDefeated);
+  drawPlayerHealthBar(ctx, state, id, feetY, bobY, useSimpleViking);
 }
 
-function drawPlayerShadow(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  feetY: number,
-  isDefeated: boolean
-) {
+function drawPlayerShadow(ctx: CanvasRenderingContext2D, x: number, feetY: number, isDefeated: boolean) {
   ctx.save();
-
-  ctx.globalAlpha =
-    isDefeated
-      ? 0.18
-      : 0.35;
-
+  ctx.globalAlpha = isDefeated ? 0.18 : 0.35;
   ctx.fillStyle = "#000000";
-
   ctx.beginPath();
-
-  ctx.ellipse(
-    x,
-    feetY + 2,
-    SPRITE_DRAW_SIZE * 0.28,
-    5,
-    0,
-    0,
-    Math.PI * 2
-  );
-
+  ctx.ellipse(x, feetY + 2, SPRITE_DRAW_SIZE * 0.28, 5, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
 
-function drawLegacyPlayerSprite(
-  ctx: CanvasRenderingContext2D,
-  state: GameState,
-  id: PlayerId,
-  bobY: number,
-  visualFacing: 1 | -1,
-  isActive: boolean,
-  isDefeated: boolean,
-  isAttacking: boolean
-) {
-  const player =
-    state.players[id];
-
-  const archetype =
-    archetypeById(
-      player.archetype
-    );
-
-  const feetY =
-    playerFeetY(
-      state,
-      id
-    );
-
-  const image =
-    getWarriorSheet(
-      player.archetype
-    );
-
-  const imageReady =
-    isImageReady(image);
-
+function drawLegacyPlayerSprite(ctx: CanvasRenderingContext2D, state: GameState, id: PlayerId, bobY: number, visualFacing: 1 | -1, isActive: boolean, isDefeated: boolean, isAttacking: boolean) {
+  const player = state.players[id];
+  const archetype = archetypeById(player.archetype);
+  const feetY = playerFeetY(state, id);
+  const image = getWarriorSheet(player.archetype);
+  const imageReady = isImageReady(image);
   ctx.save();
-
-  if (
-    isActive &&
-    !isDefeated
-  ) {
-    ctx.shadowColor =
-      archetype.accentColor;
-
+  if (isActive && !isDefeated) {
+    ctx.shadowColor = archetype.accentColor;
     ctx.shadowBlur = 18;
   }
-
-  ctx.translate(
-    player.x,
-    feetY + 2 + bobY
-  );
-
-  if (visualFacing === -1) {
-    ctx.scale(-1, 1);
-  }
-
+  ctx.translate(player.x, feetY + 2 + bobY);
+  if (visualFacing === -1) ctx.scale(-1, 1);
   if (isDefeated) {
     ctx.globalAlpha = 0.55;
   } else if (isAttacking) {
-    const attackMotion =
-      Math.sin(
-        clamp(
-          (
-            player.attackPoseUntil -
-            state.elapsed
-          ) * 16,
-          0,
-          Math.PI
-        )
-      );
-
-    ctx.translate(
-      attackMotion * 5,
-      -attackMotion * 2
-    );
-
-    ctx.rotate(
-      -0.08 * attackMotion
-    );
+    const attackMotion = Math.sin(clamp((player.attackPoseUntil - state.elapsed) * 16, 0, Math.PI));
+    ctx.translate(attackMotion * 5, -attackMotion * 2);
+    ctx.rotate(-0.08 * attackMotion);
   }
-
-  if (
-    imageReady &&
-    image
-  ) {
-    const manifest =
-      getManifest();
-
-    const configuredFrameSize =
-      manifest?.warriorFrameSize ??
-      256;
-
-    const isThreeFrameSheet =
-      image.naturalWidth >=
-        image.naturalHeight *
-          2.9 &&
-      image.naturalWidth <=
-        image.naturalHeight *
-          3.1;
-
-    const frameIndex =
-      player.hp <= 0
-        ? 2
-        : state.elapsed <
-            player.attackPoseUntil
-          ? 1
-          : 0;
-
-    let frameWidth =
-      configuredFrameSize;
-
-    let frameHeight =
-      image.naturalHeight;
-
-    let finalFrameIndex =
-      frameIndex;
-
-    if (isThreeFrameSheet) {
-      frameWidth =
-        Math.floor(
-          image.naturalWidth / 3
-        );
-
-      frameHeight =
-        image.naturalHeight;
-    } else {
-      frameWidth =
-        image.naturalWidth;
-
-      frameHeight =
-        image.naturalHeight;
-
+  if (imageReady) {
+    const configuredFrameSize = getManifest()?.warriorFrameSize ?? 256;
+    const isThreeFrameSheet = image.naturalWidth >= image.naturalHeight * 2.9 && image.naturalWidth <= image.naturalHeight * 3.1;
+    const frameIndex = player.hp <= 0 ? 2 : state.elapsed < player.attackPoseUntil ? 1 : 0;
+    let frameWidth = configuredFrameSize;
+    let frameHeight = image.naturalHeight;
+    let finalFrameIndex = frameIndex;
+    if (isThreeFrameSheet) frameWidth = Math.floor(image.naturalWidth / 3);
+    else {
+      frameWidth = image.naturalWidth;
       finalFrameIndex = 0;
     }
-
-    const sourceX =
-      finalFrameIndex *
-      frameWidth;
-
-    ctx.drawImage(
-      image,
-      sourceX,
-      0,
-      frameWidth,
-      frameHeight,
-      -SPRITE_DRAW_SIZE / 2,
-      -SPRITE_DRAW_SIZE,
-      SPRITE_DRAW_SIZE,
-      SPRITE_DRAW_SIZE
-    );
+    ctx.drawImage(image, finalFrameIndex * frameWidth, 0, frameWidth, frameHeight, -SPRITE_DRAW_SIZE / 2, -SPRITE_DRAW_SIZE, SPRITE_DRAW_SIZE, SPRITE_DRAW_SIZE);
   } else {
-    ctx.fillStyle =
-      archetype.accentColor;
-
-    roundRect(
-      ctx,
-      -PLAYER_WIDTH / 2,
-      -PLAYER_HEIGHT,
-      PLAYER_WIDTH,
-      PLAYER_HEIGHT,
-      PLAYER_WIDTH * 0.3
-    );
-
+    ctx.fillStyle = archetype.accentColor;
+    roundRect(ctx, -PLAYER_WIDTH / 2, -PLAYER_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH * 0.3);
     ctx.fill();
-
     ctx.save();
-
     ctx.globalAlpha = 0.7;
     ctx.fillStyle = "#111827";
-
     ctx.beginPath();
-
-    ctx.arc(
-      0,
-      -PLAYER_HEIGHT * 0.82,
-      PLAYER_WIDTH * 0.28,
-      0,
-      Math.PI * 2
-    );
-
+    ctx.arc(0, -PLAYER_HEIGHT * 0.82, PLAYER_WIDTH * 0.28, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
-
   ctx.restore();
 }
 
-function drawVikingCharacterRig(
-  ctx: CanvasRenderingContext2D,
-  state: GameState,
-  id: PlayerId,
-  aim: AimState,
-  breathing: number
-) {
-  const player =
-    state.players[id];
-
-  const isDefeated =
-    player.hp <= 0;
-
-  const isActive =
-    state.turn === id &&
-    state.phase !== "gameOver";
-
-  const isAiming =
-    isActive &&
-    state.phase === "aiming";
-
-  const isAttacking =
-    state.elapsed <
-    player.attackPoseUntil;
-
-  let defeatProgress = 0;
-
-  if (isDefeated) {
-    defeatProgress = 1;
-  }
-
-  let attackProgress = 0;
-
+function drawSimpleViking(ctx: CanvasRenderingContext2D, state: GameState, id: PlayerId, aim: AimState, breathing: number) {
+  const player = state.players[id];
+  const body = getSimpleVikingPart("body");
+  const weaponArm = getSimpleVikingPart("weapon_arm");
+  if (!isImageReady(body) || !isImageReady(weaponArm)) return;
+  const isDefeated = player.hp <= 0;
+  const isActive = state.turn === id && state.phase !== "gameOver";
+  const isAiming = isActive && state.phase === "aiming";
+  const isAttacking = !isDefeated && state.elapsed < player.attackPoseUntil;
+  let attackSwing = 0;
   if (isAttacking) {
-    const remaining =
-      player.attackPoseUntil -
-      state.elapsed;
-
-    attackProgress =
-      clamp(
-        1 -
-          remaining / 0.45,
-        0,
-        1
-      );
+    const progress = clamp(1 - (player.attackPoseUntil - state.elapsed) / 0.45, 0, 1);
+    attackSwing = Math.sin(progress * Math.PI);
   }
-
-  const attackSwing =
-    isAttacking
-      ? Math.sin(
-          attackProgress *
-            Math.PI
-        )
-      : 0;
-
-  let aimAngle = -0.25;
-
-  if (
-    isAiming &&
-    aim.active
-  ) {
-    aimAngle =
-      clamp(
-        Math.atan2(
-          aim.dragY,
-          Math.max(
-            1,
-            Math.abs(aim.dragX)
-          )
-        ),
-        -1.25,
-        0.45
-      );
+  let aimAngle = -0.08;
+  if (isAiming && aim.active) {
+    const launchAngle = clamp(Math.atan2(-aim.dragY, Math.max(1, Math.abs(aim.dragX))), 5 * Math.PI / 180, 85 * Math.PI / 180);
+    aimAngle = -launchAngle + 0.72;
   }
-
-  const bodyBreath =
-    isDefeated
-      ? 0
-      : breathing * 0.7;
-
-  const capeMotion =
-    isDefeated
-      ? 0
-      : Math.sin(
-          frameClock * 2.3
-        ) * 0.045;
-
-  const headMotion =
-    isDefeated
-      ? 0
-      : Math.sin(
-          frameClock * 1.7
-        ) * 0.018;
-
+  const breathScaleY = isDefeated ? 1 : 1 + breathing * 0.006;
+  const breathScaleX = isDefeated ? 1 : 1 - breathing * 0.002;
   ctx.save();
-
   if (isDefeated) {
     ctx.globalAlpha = 0.58;
-    ctx.translate(0, -7);
-    ctx.rotate(-1.33);
-    ctx.translate(-12, 4);
+    ctx.translate(-10, -8);
+    ctx.rotate(-1.31);
   } else {
-    ctx.translate(
-      attackSwing * 4,
-      -attackSwing * 2
-    );
-
-    ctx.rotate(
-      -attackSwing * 0.05
-    );
+    ctx.translate(attackSwing * 3.5, -attackSwing * 1.5);
+    ctx.rotate(-attackSwing * 0.035);
   }
-
-  const rigScale =
-    VIKING_RIG_HEIGHT / 112;
-
-  ctx.scale(
-    rigScale,
-    rigScale
-  );
-
-  // Cape behind the body.
-  drawRigPart(
-    ctx,
-    "cape",
-    -7,
-    -79 + bodyBreath * 0.2,
-    48,
-    74,
-    0.42,
-    0.08,
-    capeMotion -
-      attackSwing * 0.05,
-    0.96
-  );
-
-  // Back leg.
-  drawLegChain(
-    ctx,
-    "right",
-    8,
-    -41,
-    breathing,
-    isDefeated
-  );
-
-  // Front leg.
-  drawLegChain(
-    ctx,
-    "left",
-    -10,
-    -41,
-    -breathing,
-    isDefeated
-  );
-
-  // Pelvis.
-  drawRigPart(
-    ctx,
-    "pelvis",
-    0,
-    -45,
-    34,
-    25,
-    0.5,
-    0.28,
-    breathing * 0.01
-  );
-
-  // Torso skin underneath armor.
-  drawRigPart(
-    ctx,
-    "torso_skin",
-    0,
-    -68 + bodyBreath * 0.3,
-    39,
-    42,
-    0.5,
-    0.54,
-    0
-  );
-
-  // Torso armor.
-  drawRigPart(
-    ctx,
-    "torso_armor",
-    0,
-    -67 + bodyBreath * 0.3,
-    47,
-    44,
-    0.5,
-    0.5,
-    breathing * 0.006
-  );
-
-  // Back shoulder and shield arm.
-  drawRigPart(
-    ctx,
-    "shoulder_right",
-    -14,
-    -76 + bodyBreath * 0.3,
-    22,
-    23,
-    0.5,
-    0.42,
-    -0.1
-  );
-
-  drawArmChain(
-    ctx,
-    "right",
-    -15,
-    -73 + bodyBreath * 0.3,
-    0.23,
-    -0.14,
-    attackSwing,
-    false
-  );
-
-  drawRigPart(
-    ctx,
-    "shield",
-    -24,
-    -57,
-    37,
-    48,
-    0.5,
-    0.5,
-    -0.14,
-    0.96
-  );
-
-  // Front shoulder.
-  drawRigPart(
-    ctx,
-    "shoulder_left",
-    15,
-    -76 + bodyBreath * 0.3,
-    21,
-    24,
-    0.5,
-    0.42,
-    0.08
-  );
-
-  // Weapon arm.
-  drawWeaponArm(
-    ctx,
-    15,
-    -73 + bodyBreath * 0.3,
-    aimAngle,
-    attackSwing
-  );
-
-  // Hair behind the head.
-  drawRigPart(
-    ctx,
-    "hair_back",
-    -3,
-    -94 + bodyBreath * 0.25,
-    27,
-    34,
-    0.5,
-    0.5,
-    headMotion -
-      capeMotion * 0.2
-  );
-
-  // Head.
-  drawRigPart(
-    ctx,
-    "head",
-    1,
-    -94 + bodyBreath * 0.25,
-    27,
-    37,
-    0.5,
-    0.55,
-    headMotion
-  );
-
-  // Beard.
-  drawRigPart(
-    ctx,
-    "beard",
-    4,
-    -87 + bodyBreath * 0.25,
-    19,
-    34,
-    0.5,
-    0.42,
-    headMotion * 1.2
-  );
-
-  // Helmet.
-  drawRigPart(
-    ctx,
-    "helmet",
-    0,
-    -101 + bodyBreath * 0.25,
-    31,
-    34,
-    0.5,
-    0.54,
-    headMotion
-  );
-
+  ctx.save();
+  ctx.scale(breathScaleX, breathScaleY);
+  // Coherent full body is never split, preserving proportions.
+  drawSimplePart(ctx, body, 0, -58, SIMPLE_VIKING_WIDTH, SIMPLE_VIKING_HEIGHT, 0.5, 0.5, 0, 1);
+  ctx.restore();
+  // Only one overlay moves. The pivot is kept near the shoulder.
+  ctx.save();
+  ctx.translate(17, -83 + breathing * 0.15);
+  ctx.rotate(aimAngle + attackSwing * 0.72);
+  drawSimplePart(ctx, weaponArm, 0, 0, 55, 58, 0.25, 0.42, -0.03, 1);
+  ctx.restore();
   ctx.restore();
 }
 
-function drawLegChain(
-  ctx: CanvasRenderingContext2D,
-  side: "left" | "right",
-  hipX: number,
-  hipY: number,
-  breathing: number,
-  isDefeated: boolean
-) {
-  const upperName =
-    side === "left"
-      ? "upper_leg_left"
-      : "upper_leg_right";
-
-  const lowerName =
-    side === "left"
-      ? "lower_leg_left"
-      : "lower_leg_right";
-
-  const bootName =
-    side === "left"
-      ? "boot_left"
-      : "boot_right";
-
-  const walkMotion =
-    isDefeated
-      ? 0
-      : breathing * 0.025;
-
+function drawSimplePart(ctx: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number, anchorX = 0.5, anchorY = 0.5, rotation = 0, alpha = 1) {
   ctx.save();
-
-  ctx.translate(
-    hipX,
-    hipY
-  );
-
-  ctx.rotate(
-    side === "left"
-      ? walkMotion
-      : -walkMotion
-  );
-
-  drawRigPart(
-    ctx,
-    upperName,
-    0,
-    0,
-    17,
-    31,
-    0.5,
-    0.14,
-    0
-  );
-
-  ctx.translate(
-    side === "left"
-      ? -1
-      : 1,
-    24
-  );
-
-  ctx.rotate(
-    side === "left"
-      ? -walkMotion * 0.7
-      : walkMotion * 0.7
-  );
-
-  drawRigPart(
-    ctx,
-    lowerName,
-    0,
-    0,
-    17,
-    30,
-    0.5,
-    0.12,
-    0
-  );
-
-  ctx.translate(0, 23);
-
-  drawRigPart(
-    ctx,
-    bootName,
-    side === "left"
-      ? 2
-      : 1,
-    0,
-    22,
-    24,
-    0.43,
-    0.2,
-    0
-  );
-
-  ctx.restore();
-}
-
-function drawArmChain(
-  ctx: CanvasRenderingContext2D,
-  side: "left" | "right",
-  shoulderX: number,
-  shoulderY: number,
-  upperRotation: number,
-  forearmRotation: number,
-  attackSwing: number,
-  weaponArm: boolean
-) {
-  const upperName =
-    side === "left"
-      ? "upper_arm_left"
-      : "upper_arm_right";
-
-  const forearmName =
-    side === "left"
-      ? "forearm_left"
-      : "forearm_right";
-
-  const handName =
-    side === "left"
-      ? "hand_left"
-      : "hand_right";
-
-  ctx.save();
-
-  ctx.translate(
-    shoulderX,
-    shoulderY
-  );
-
-  ctx.rotate(
-    upperRotation -
-      attackSwing *
-        (weaponArm ? 0.8 : 0.05)
-  );
-
-  drawRigPart(
-    ctx,
-    upperName,
-    0,
-    0,
-    14,
-    28,
-    0.5,
-    0.13,
-    0
-  );
-
-  ctx.translate(0, 21);
-
-  ctx.rotate(
-    forearmRotation -
-      attackSwing *
-        (weaponArm ? 0.4 : 0.05)
-  );
-
-  drawRigPart(
-    ctx,
-    forearmName,
-    0,
-    0,
-    13,
-    27,
-    0.5,
-    0.12,
-    0
-  );
-
-  ctx.translate(0, 20);
-
-  drawRigPart(
-    ctx,
-    handName,
-    0,
-    0,
-    11,
-    18,
-    0.5,
-    0.18,
-    0
-  );
-
-  ctx.restore();
-}
-
-function drawWeaponArm(
-  ctx: CanvasRenderingContext2D,
-  shoulderX: number,
-  shoulderY: number,
-  aimAngle: number,
-  attackSwing: number
-) {
-  ctx.save();
-
-  ctx.translate(
-    shoulderX,
-    shoulderY
-  );
-
-  const swingRotation =
-    attackSwing > 0
-      ? -1.2 +
-        attackSwing * 2.15
-      : 0;
-
-  const armRotation =
-    aimAngle +
-    0.45 +
-    swingRotation;
-
-  ctx.rotate(armRotation);
-
-  drawRigPart(
-    ctx,
-    "upper_arm_left",
-    0,
-    0,
-    14,
-    28,
-    0.5,
-    0.13,
-    0
-  );
-
-  ctx.translate(0, 21);
-  ctx.rotate(-0.46);
-
-  drawRigPart(
-    ctx,
-    "forearm_left",
-    0,
-    0,
-    13,
-    27,
-    0.5,
-    0.12,
-    0
-  );
-
-  ctx.translate(0, 20);
-
-  drawRigPart(
-    ctx,
-    "hand_left",
-    0,
-    0,
-    11,
-    18,
-    0.5,
-    0.18,
-    0
-  );
-
-  // Axe rotates around the Viking hand.
-  drawRigPart(
-    ctx,
-    "axe",
-    2,
-    -8,
-    24,
-    58,
-    0.5,
-    0.72,
-    -0.48 +
-      attackSwing * 0.25
-  );
-
-  ctx.restore();
-}
-
-function drawRigPart(
-  ctx: CanvasRenderingContext2D,
-  partName: string,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  anchorX = 0.5,
-  anchorY = 0.5,
-  rotation = 0,
-  alpha = 1
-): boolean {
-  const image =
-    getCharacterRigPart(
-      VIKING_RIG_ID,
-      partName
-    );
-
-  if (!isImageReady(image)) {
-    return false;
-  }
-
-  ctx.save();
-
   ctx.translate(x, y);
   ctx.rotate(rotation);
   ctx.globalAlpha *= alpha;
-
-  ctx.drawImage(
-    image,
-    -width * anchorX,
-    -height * anchorY,
-    width,
-    height
-  );
-
+  ctx.drawImage(image, -width * anchorX, -height * anchorY, width, height);
   ctx.restore();
-
-  return true;
 }
 
-function drawPlayerStatusEffects(
-  ctx: CanvasRenderingContext2D,
-  state: GameState,
-  id: PlayerId,
-  feetY: number,
-  bobY: number,
-  isDefeated: boolean
-) {
-  const player =
-    state.players[id];
-
-  if (
-    player.status.shieldActive &&
-    !isDefeated
-  ) {
-    const shieldPulse =
-      1 +
-      Math.sin(
-        frameClock * 5
-      ) * 0.025;
-
+function drawPlayerStatusEffects(ctx: CanvasRenderingContext2D, state: GameState, id: PlayerId, feetY: number, bobY: number, isDefeated: boolean) {
+  const player = state.players[id];
+  if (player.status.shieldActive && !isDefeated) {
+    const shieldPulse = 1 + Math.sin(frameClock * 5) * 0.025;
     ctx.save();
-
-    ctx.strokeStyle =
-      "rgba(103,232,249,0.9)";
-
-    ctx.fillStyle =
-      "rgba(103,232,249,0.08)";
-
+    ctx.strokeStyle = "rgba(103,232,249,0.9)";
+    ctx.fillStyle = "rgba(103,232,249,0.08)";
     ctx.lineWidth = 2.5;
     ctx.setLineDash([5, 4]);
-
     ctx.beginPath();
-
-    ctx.arc(
-      player.x,
-      feetY -
-        SPRITE_DRAW_SIZE * 0.5 +
-        bobY,
-      SPRITE_DRAW_SIZE *
-        0.58 *
-        shieldPulse,
-      0,
-      Math.PI * 2
-    );
-
+    ctx.arc(player.x, feetY - SPRITE_DRAW_SIZE * 0.5 + bobY, SPRITE_DRAW_SIZE * 0.58 * shieldPulse, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-
     ctx.restore();
   }
-
-  if (
-    player.status.burnTurns > 0 &&
-    !isDefeated
-  ) {
+  if (player.status.burnTurns > 0 && !isDefeated) {
     ctx.save();
-
     ctx.font = "13px Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-
-    ctx.fillText(
-      "🔥",
-      player.x +
-        SPRITE_DRAW_SIZE * 0.34,
-      feetY -
-        SPRITE_DRAW_SIZE -
-        4 +
-        bobY
-    );
-
+    ctx.fillText("🔥", player.x + SPRITE_DRAW_SIZE * 0.34, feetY - SPRITE_DRAW_SIZE - 4 + bobY);
     ctx.restore();
   }
-
-  if (
-    player.status.slowTurns > 0 &&
-    !isDefeated
-  ) {
+  if (player.status.slowTurns > 0 && !isDefeated) {
     ctx.save();
-
     ctx.font = "13px Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-
-    ctx.fillText(
-      "❄️",
-      player.x -
-        SPRITE_DRAW_SIZE * 0.34,
-      feetY -
-        SPRITE_DRAW_SIZE -
-        4 +
-        bobY
-    );
-
+    ctx.fillText("❄️", player.x - SPRITE_DRAW_SIZE * 0.34, feetY - SPRITE_DRAW_SIZE - 4 + bobY);
     ctx.restore();
   }
 }
 
-function drawPlayerHealthBar(
-  ctx: CanvasRenderingContext2D,
-  state: GameState,
-  id: PlayerId,
-  feetY: number,
-  bobY: number,
-  usesRig: boolean
-) {
-  const player =
-    state.players[id];
-
+function drawPlayerHealthBar(ctx: CanvasRenderingContext2D, state: GameState, id: PlayerId, feetY: number, bobY: number, usesSimpleViking: boolean) {
+  const player = state.players[id];
   const healthBarWidth = 62;
-
-  const healthBarX =
-    player.x -
-    healthBarWidth / 2;
-
-  const visualHeight =
-    usesRig
-      ? VIKING_RIG_HEIGHT
-      : SPRITE_DRAW_SIZE;
-
-  const healthBarY =
-    feetY -
-    visualHeight -
-    20 +
-    bobY;
-
+  const healthBarX = player.x - healthBarWidth / 2;
+  const visualHeight = usesSimpleViking ? SIMPLE_VIKING_HEIGHT : SPRITE_DRAW_SIZE;
+  const healthBarY = feetY - visualHeight - 20 + bobY;
   ctx.save();
-
-  ctx.fillStyle =
-    "rgba(10,14,24,0.65)";
-
-  roundRect(
-    ctx,
-    healthBarX - 2,
-    healthBarY - 2,
-    healthBarWidth + 4,
-    11,
-    5
-  );
-
+  ctx.fillStyle = "rgba(10,14,24,0.65)";
+  roundRect(ctx, healthBarX - 2, healthBarY - 2, healthBarWidth + 4, 11, 5);
   ctx.fill();
-
-  const healthRatio =
-    clamp(
-      player.maxHp > 0
-        ? player.hp /
-          player.maxHp
-        : 0,
-      0,
-      1
-    );
-
-  const healthColor =
-    healthRatio > 0.5
-      ? "#4ade80"
-      : healthRatio > 0.22
-        ? "#facc15"
-        : "#f87171";
-
+  const healthRatio = clamp(player.maxHp > 0 ? player.hp / player.maxHp : 0, 0, 1);
+  const healthColor = healthRatio > 0.5 ? "#4ade80" : healthRatio > 0.22 ? "#facc15" : "#f87171";
   if (healthRatio > 0) {
-    ctx.fillStyle =
-      healthColor;
-
-    roundRect(
-      ctx,
-      healthBarX,
-      healthBarY,
-      healthBarWidth *
-        healthRatio,
-      7,
-      3.5
-    );
-
+    ctx.fillStyle = healthColor;
+    roundRect(ctx, healthBarX, healthBarY, healthBarWidth * healthRatio, 7, 3.5);
     ctx.fill();
   }
-
   ctx.restore();
 }
 
-function drawWeaponIcon(
-  ctx: CanvasRenderingContext2D,
-  type: WeaponDef["type"],
-  colorMain: string,
-  size: number
-) {
-  const icon =
-    getWeaponIcon(type);
-
+function drawWeaponIcon(ctx: CanvasRenderingContext2D, type: WeaponDef["type"], colorMain: string, size: number) {
+  const icon = getWeaponIcon(type);
   if (isImageReady(icon)) {
-    const width =
-      icon.naturalWidth ||
-      icon.width ||
-      size;
-
-    const height =
-      icon.naturalHeight ||
-      icon.height ||
-      size;
-
-    const aspectRatio =
-      width / height;
-
+    const width = icon.naturalWidth || icon.width || size;
+    const height = icon.naturalHeight || icon.height || size;
+    const aspectRatio = width / height;
     let drawWidth = size;
     let drawHeight = size;
-
-    if (
-      Number.isFinite(
-        aspectRatio
-      ) &&
-      aspectRatio > 1
-    ) {
-      drawHeight =
-        size / aspectRatio;
-    } else if (
-      Number.isFinite(
-        aspectRatio
-      ) &&
-      aspectRatio > 0 &&
-      aspectRatio < 1
-    ) {
-      drawWidth =
-        size * aspectRatio;
-    }
-
-    ctx.drawImage(
-      icon,
-      -drawWidth / 2,
-      -drawHeight / 2,
-      drawWidth,
-      drawHeight
-    );
+    if (Number.isFinite(aspectRatio) && aspectRatio > 1) drawHeight = size / aspectRatio;
+    else if (Number.isFinite(aspectRatio) && aspectRatio > 0 && aspectRatio < 1) drawWidth = size * aspectRatio;
+    ctx.drawImage(icon, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
   } else {
     ctx.fillStyle = colorMain;
-
     ctx.beginPath();
-
-    ctx.arc(
-      0,
-      0,
-      size * 0.22,
-      0,
-      Math.PI * 2
-    );
-
+    ctx.arc(0, 0, size * 0.22, 0, Math.PI * 2);
     ctx.fill();
   }
 }
 
-function drawAimGuide(
-  ctx: CanvasRenderingContext2D,
-  state: GameState,
-  playerId: PlayerId,
-  aim: AimState
-) {
-  const player =
-    state.players[playerId];
-
-  const feetY =
-    playerFeetY(
-      state,
-      playerId
-    );
-
-  const originY =
-    feetY -
-    SPRITE_DRAW_SIZE * 0.6;
-
-  const originX =
-    player.x +
-    player.facing *
-      (
-        SPRITE_DRAW_SIZE *
-        0.22
-      );
-
-  const weapon =
-    weaponById(
-      state.selectedWeapon[
-        playerId
-      ]
-    );
-
-  const powerRatio =
-    clamp(
-      Math.hypot(
-        aim.dragX,
-        aim.dragY
-      ) / MAX_DRAG,
-      0,
-      1
-    );
-
+function drawAimGuide(ctx: CanvasRenderingContext2D, state: GameState, playerId: PlayerId, aim: AimState) {
+  const player = state.players[playerId];
+  const feetY = playerFeetY(state, playerId);
+  const originY = feetY - SPRITE_DRAW_SIZE * 0.6;
+  const originX = player.x + player.facing * (SPRITE_DRAW_SIZE * 0.22);
+  const weapon = weaponById(state.selectedWeapon[playerId]);
+  const powerRatio = clamp(Math.hypot(aim.dragX, aim.dragY) / MAX_DRAG, 0, 1);
   ctx.save();
-
-  ctx.strokeStyle =
-    "rgba(255,255,255,0.85)";
-
+  ctx.strokeStyle = "rgba(255,255,255,0.85)";
   ctx.lineWidth = 3;
-
   ctx.beginPath();
-
-  ctx.moveTo(
-    originX,
-    originY
-  );
-
-  ctx.lineTo(
-    originX + aim.dragX,
-    originY + aim.dragY
-  );
-
+  ctx.moveTo(originX, originY);
+  ctx.lineTo(originX + aim.dragX, originY + aim.dragY);
   ctx.stroke();
-
-  const angle =
-    clamp(
-      Math.atan2(
-        -aim.dragY,
-        Math.abs(aim.dragX) < 1
-          ? 1
-          : Math.abs(aim.dragX)
-      ),
-      (5 * Math.PI) / 180,
-      (85 * Math.PI) / 180
-    );
-
-  const speed =
-    powerRatio *
-    MAX_LAUNCH_SPEED *
-    weapon.speedScale *
-    weapon.weightDrag;
-
-  const velocityX =
-    Math.cos(angle) *
-    speed *
-    player.facing;
-
-  const velocityY =
-    -Math.sin(angle) *
-    speed;
-
-  const points =
-    simulateTrajectory(
-      originX,
-      originY,
-      velocityX,
-      velocityY,
-      state.wind,
-      weapon.gravityScale,
-      state.terrain,
-      26,
-      1 / 60
-    );
-
-  ctx.fillStyle =
-    "rgba(255,255,255,0.7)";
-
-  for (
-    let i = 0;
-    i < points.length;
-    i++
-  ) {
-    if (i % 4 !== 0) {
-      continue;
-    }
-
-    const trailFade =
-      1 - i / points.length;
-
-    ctx.globalAlpha =
-      0.25 +
-      trailFade * 0.55;
-
+  const angle = clamp(Math.atan2(-aim.dragY, Math.abs(aim.dragX) < 1 ? 1 : Math.abs(aim.dragX)), 5 * Math.PI / 180, 85 * Math.PI / 180);
+  const speed = powerRatio * MAX_LAUNCH_SPEED * weapon.speedScale * weapon.weightDrag;
+  const velocityX = Math.cos(angle) * speed * player.facing;
+  const velocityY = -Math.sin(angle) * speed;
+  const points = simulateTrajectory(originX, originY, velocityX, velocityY, state.wind, weapon.gravityScale, state.terrain, 26, 1 / 60);
+  ctx.fillStyle = "rgba(255,255,255,0.7)";
+  for (let i = 0; i < points.length; i++) {
+    if (i % 4 !== 0) continue;
+    const trailFade = 1 - i / points.length;
+    ctx.globalAlpha = 0.25 + trailFade * 0.55;
     ctx.beginPath();
-
-    ctx.arc(
-      points[i].x,
-      points[i].y,
-      2.6,
-      0,
-      Math.PI * 2
-    );
-
+    ctx.arc(points[i].x, points[i].y, 2.6, 0, Math.PI * 2);
     ctx.fill();
   }
-
   ctx.globalAlpha = 1;
-
-  ctx.fillStyle =
-    powerRatio > 0.85
-      ? "#f87171"
-      : "#e8edf5";
-
+  ctx.fillStyle = powerRatio > 0.85 ? "#f87171" : "#e8edf5";
   ctx.font = "bold 12px Arial";
   ctx.textAlign = "center";
-
-  ctx.fillText(
-    Math.round(
-      powerRatio * 100
-    ) + "%",
-    originX,
-    originY - 26
-  );
-
+  ctx.fillText(Math.round(powerRatio * 100) + "%", originX, originY - 26);
   ctx.restore();
 }
 
-function drawProjectile(
-  ctx: CanvasRenderingContext2D,
-  state: GameState
-) {
-  const projectile =
-    state.projectile!;
-
+function drawProjectile(ctx: CanvasRenderingContext2D, state: GameState) {
+  const projectile = state.projectile!;
   ctx.save();
-
-  for (
-    let i = 0;
-    i < projectile.trail.length;
-    i++
-  ) {
-    const trailPoint =
-      projectile.trail[i];
-
-    ctx.globalAlpha =
-      projectile.trail.length > 0
-        ? (
-            i /
-            projectile.trail.length
-          ) * 0.45
-        : 0;
-
-    ctx.fillStyle =
-      projectile.weapon.colorTrail;
-
+  for (let i = 0; i < projectile.trail.length; i++) {
+    const trailPoint = projectile.trail[i];
+    ctx.globalAlpha = projectile.trail.length > 0 ? (i / projectile.trail.length) * 0.45 : 0;
+    ctx.fillStyle = projectile.weapon.colorTrail;
     ctx.beginPath();
-
-    ctx.arc(
-      trailPoint.x,
-      trailPoint.y,
-      3,
-      0,
-      Math.PI * 2
-    );
-
+    ctx.arc(trailPoint.x, trailPoint.y, 3, 0, Math.PI * 2);
     ctx.fill();
   }
-
   ctx.globalAlpha = 1;
-
-  ctx.translate(
-    projectile.x,
-    projectile.y
-  );
-
-  if (
-    projectile.weapon.type ===
-      "axe" ||
-    projectile.weapon.type ===
-      "shuriken"
-  ) {
-    ctx.rotate(
-      frameClock *
-        22 *
-        (
-          projectile.vx >= 0
-            ? 1
-            : -1
-        )
-    );
+  ctx.translate(projectile.x, projectile.y);
+  if (projectile.weapon.type === "axe" || projectile.weapon.type === "shuriken") {
+    ctx.rotate(frameClock * 22 * (projectile.vx >= 0 ? 1 : -1));
   } else {
-    ctx.rotate(
-      Math.atan2(
-        projectile.vy,
-        projectile.vx
-      )
-    );
+    ctx.rotate(Math.atan2(projectile.vy, projectile.vx));
   }
-
-  drawWeaponIcon(
-    ctx,
-    projectile.weapon.type,
-    projectile.weapon.colorMain,
-    WEAPON_ICON_SIZE
-  );
-
+  drawWeaponIcon(ctx, projectile.weapon.type, projectile.weapon.colorMain, WEAPON_ICON_SIZE);
   ctx.restore();
 }
 
-function drawParticles(
-  ctx: CanvasRenderingContext2D,
-  state: GameState
-) {
+function drawParticles(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.save();
-
-  for (
-    const particle of
-    state.particles
-  ) {
-    ctx.globalAlpha =
-      Math.max(
-        0,
-        particle.life /
-          particle.maxLife
-      );
-
-    ctx.fillStyle =
-      particle.color;
-
+  for (const particle of state.particles) {
+    ctx.globalAlpha = Math.max(0, particle.life / particle.maxLife);
+    ctx.fillStyle = particle.color;
     ctx.beginPath();
-
-    ctx.arc(
-      particle.x,
-      particle.y,
-      particle.size,
-      0,
-      Math.PI * 2
-    );
-
+    ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
     ctx.fill();
   }
-
   ctx.globalAlpha = 1;
   ctx.restore();
 }
 
-function drawFloaters(
-  ctx: CanvasRenderingContext2D,
-  state: GameState
-) {
+function drawFloaters(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.save();
-
   ctx.font = "bold 15px Arial";
   ctx.textAlign = "center";
-
-  for (
-    const floater of
-    state.floaters
-  ) {
-    ctx.globalAlpha =
-      Math.max(
-        0,
-        Math.min(
-          1,
-          floater.life
-        )
-      );
-
-    ctx.fillStyle =
-      floater.color;
-
-    ctx.fillText(
-      floater.text,
-      floater.x,
-      floater.y
-    );
+  for (const floater of state.floaters) {
+    ctx.globalAlpha = Math.max(0, Math.min(1, floater.life));
+    ctx.fillStyle = floater.color;
+    ctx.fillText(floater.text, floater.x, floater.y);
   }
-
   ctx.globalAlpha = 1;
   ctx.restore();
 }
 
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number
-) {
-  const safeRadius =
-    Math.max(
-      0,
-      Math.min(
-        radius,
-        Math.abs(width) / 2,
-        Math.abs(height) / 2
-      )
-    );
-
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
+  const safeRadius = Math.max(0, Math.min(radius, Math.abs(width) / 2, Math.abs(height) / 2));
   ctx.beginPath();
-
-  ctx.moveTo(
-    x + safeRadius,
-    y
-  );
-
-  ctx.arcTo(
-    x + width,
-    y,
-    x + width,
-    y + height,
-    safeRadius
-  );
-
-  ctx.arcTo(
-    x + width,
-    y + height,
-    x,
-    y + height,
-    safeRadius
-  );
-
-  ctx.arcTo(
-    x,
-    y + height,
-    x,
-    y,
-    safeRadius
-  );
-
-  ctx.arcTo(
-    x,
-    y,
-    x + width,
-    y,
-    safeRadius
-  );
-
+  ctx.moveTo(x + safeRadius, y);
+  ctx.arcTo(x + width, y, x + width, y + height, safeRadius);
+  ctx.arcTo(x + width, y + height, x, y + height, safeRadius);
+  ctx.arcTo(x, y + height, x, y, safeRadius);
+  ctx.arcTo(x, y, x + width, y, safeRadius);
   ctx.closePath();
 }
