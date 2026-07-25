@@ -607,23 +607,23 @@ body {
 
 .move-controls {
   position: absolute;
-  bottom: 148px;
-  left: 12px;
+  bottom: 120px;
+  left: 10px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
   pointer-events: none;
   z-index: 4;
+  direction: ltr; /* keep left = left, right = right regardless of page RTL */
 }
 
 .stamina-bar-wrap {
-  width: 100px;
+  width: 108px;
   height: 5px;
   border-radius: 3px;
   background: rgba(10, 14, 24, 0.55);
   overflow: hidden;
-  margin-left: 4px;
 }
 
 .stamina-bar {
@@ -634,18 +634,19 @@ body {
 
 .move-buttons {
   display: flex;
-  gap: 6px;
+  direction: ltr;
+  gap: 10px;
   pointer-events: auto;
 }
 
 .move-btn {
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.25);
   background: rgba(10, 14, 24, 0.55);
   color: #e8edf5;
-  font-size: 18px;
+  font-size: 17px;
   display: flex;
   align-items: center;
   justify-content: center;
