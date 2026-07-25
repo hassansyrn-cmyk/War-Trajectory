@@ -1,45 +1,76 @@
-# War Trajectory Mobile (WTM)
+# War Trajectory (نسخة الجوال)
 
-War Trajectory Mobile (WTM) is an elite, high-fidelity 3D turn-based tactical physics game designed for Android and iOS devices. This repository contains the complete, fully-playable single-player MVP prototype built in **Unity 2022.3 LTS**.
+لعبة مواجهة مقذوفات تكتيكية (اسحب لتحديد الزاوية والقوة ثم أطلق) — أنت ضد خصم يتحكم فيه الذكاء الاصطناعي، بفيزياء واقعية (جاذبية + رياح)، محاربون بمظهر مميز لكل نوع، أسلحة متعددة بأشكال حقيقية، مهارات، أرض متعددة الطبقات قابلة للتشوّه، خلفيات متعددة الطبقات (Parallax)، وكاميرا تتحرك مع اللعب.
 
-For complete technical specifications and design layouts, see the **[Official Documentation Suite](docs/README.md)**.
+هذا مشروع **Vite + React + TypeScript + Capacitor** جاهز للتحويل إلى تطبيق أندرويد (APK/AAB)، مقفل على **الوضع الأفقي (Landscape)** لأن هذا النوع من الألعاب يحتاج عرضاً أفقياً واسعاً.
 
----
+## التشغيل محلياً للمعاينة في المتصفح
 
-## 🚀 Features Implemented in the MVP
-1. **Fully Playable Core Loop**:
-   - Play as Sir Gareth (or any placeholder class) in a 1v1 turn-based battle against a smart AI.
-   - Dynamic canyons desert weather with horizontal and vertical wind drafts updated every turn.
-2. **Tactile Touch Drag-to-Aim Controls**:
-   - Touch drag-back gesture system designed to keep player sight-lines perfectly clear.
-   - Trajectory preview renderer calculating weight, drag force, wind resistance, and gravity forces.
-3. **Weapon Selection & Skills**:
-   - Equip 3 distinct weapons: **Basic Bow** (light, wind-sensitive), **Explosive Rocket** (heavy, splash damage, dynamic sandstone cover destruction), and **Throwing Axe** (lob-heavy).
-   - Use active skills: **Shield** (reduces damage by 60%) and **Double Damage** (applies 2x multiplier but adds 20% weapon weight).
-4. **Interactive 3D Canyons Map**:
-   - Real-time physics calculations with colliders, custom mass parameters, destructible sandstone blocks, and headshot multipliers.
-5. **Polished Dynamic Main Menu & Training Sandbox**:
-   - Play vs AI or access a **Training Mode** with immortal stationary targets for testing.
-   - Built-in sound manager and haptic vibration engine.
+```
+npm install
+npm run dev
+```
 
----
+يفتح المعاينة على `http://localhost:5173`. لمعاينة قريبة من الجوال افتح أدوات المطوّر وفعّل "وضع الجهاز" بأفقي (Landscape).
 
-## 🛠 Build Instructions
+## اختبار آلي لمنطق اللعبة (اختياري)
 
-### Local Development Setup
-1. Clone this repository.
-2. Open the project folder in **Unity Hub** using **Unity 2022.3 LTS** (such as `2022.3.15f1`).
-3. Set the target build platform to **Android**.
-4. Open `Assets/Scenes/MainMenu.unity` and click **Play** to test inside the Unity Editor! You can use mouse clicks & drags to simulate touch gestures.
+```
+npm run test
+```
 
-### Automated Android Build via GitHub Actions
-An automated GitHub Actions workflow is fully set up in `.github/workflows/build.yml` using the **Game-CI** runner pipeline.
+يشغّل محاكاة سريعة لعشرات المباريات الكاملة (خرائط وصعوبات مختلفة) للتأكد من عدم وجود أعطال في الفيزياء أو منطق الأدوار قبل أي تعديل مستقبلي.
 
-To configure automated builds for your fork:
-1. Obtain a Unity Personal License (.ulf file) or standard Serial key.
-2. Add the following **GitHub Repository Secrets** under Settings -> Secrets and variables -> Actions:
-   - `UNITY_EMAIL`: Your Unity registration email.
-   - `UNITY_PASSWORD`: Your Unity account password.
-   - `UNITY_LICENSE`: The entire content of your `.ulf` license file.
-3. The build will execute automatically on pushing to the `main` branch, or can be triggered manually using `workflow_dispatch`.
-4. Download the compiled `.apk` direct installer file from the GitHub Actions execution summary artifacts!
+## تحويلها إلى تطبيق أندرويد
+
+مجلد `android/` جاهز ومُضاف مسبقاً في هذا المشروع، فلا حاجة لأمر `cap add android`:
+
+```
+npm install
+npm run build
+npx cap sync android
+npx cap open android
+```
+
+آخر أمر يفتح المشروع في **Android Studio**، ومنه: `Build > Generate Signed Bundle / APK` لإصدار ملف APK أو AAB لرفعه على Google Play.
+
+إن كنت تستخدم GitHub Actions أو أي وكيل نشر تلقائي (Manus / Jules / Copilot)، فكل ما يحتاجه هو تنفيذ نفس الأوامر أعلاه بالترتيب — لا حاجة لأي إعداد يدوي إضافي.
+
+## هيكل المشروع
+
+```
+src/
+  game/
+    entities.ts   → تعريف الأسلحة، المهارات، الخرائط، أنواع المحاربين (Archetypes)
+    physics.ts    → توليد الأرض، الديكورات، وحساب المسار الفيزيائي
+    engine.ts     → آلة الحالة الرئيسية للعبة (الأدوار، الإصابات، الكاميرا، الذكاء الاصطناعي)
+    render.ts     → رسم كل شيء على الـ canvas (خلفية، أرض، محاربون، أسلحة، مؤثرات)
+    audio.ts       → مؤثرات صوتية مولّدة برمجياً (بدون ملفات صوت خارجية)
+    storage.ts      → حفظ الإحصائيات والإعدادات محلياً على الجهاز
+  components/
+    MainMenu.tsx  → شاشة القائمة الرئيسية (اختيار الخريطة والصعوبة)
+    GameScreen.tsx → شاشة اللعب (canvas + التحكم باللمس + الواجهة العائمة)
+  App.tsx, main.tsx, styles.css
+capacitor.config.ts → إعدادات تطبيق أندرويد (اسم الحزمة: com.hasan.wartrajectory)
+android/AndroidManifest.xml → مقفل على android:screenOrientation="sensorLandscape"
+```
+
+## ما الجديد في هذا التحديث (تحويل بصري كبير)
+
+- **إصلاح مشكلة المساحات السوداء الفارغة**: الواجهة (أعلى/أسفل) أصبحت طبقة شفافة عائمة فوق الملعب بدل ما تكون تدفعه لمساحة صغيرة — الملعب الآن يملأ الشاشة بالكامل دائماً. تحققت من هذا بقياس فعلي للبكسلات، مو بالتخمين.
+- **قفل الاتجاه الأفقي** في تطبيق أندرويد + رسالة "أدر جهازك" لو فُتحت اللعبة بالخطأ بالوضع العمودي بالمتصفح.
+- **محاربون بمظهر طبقات حقيقي** بدل الدوائر والمستطيلات: جسم/رأس/ذراعين/رجلين منفصلة، بألوان وأشكال خوذة مختلفة حسب نوع المحارب — الآن فيه نوعان مميزان بصرياً (محارب الفأس الشمالي / رامي الغابة) كأساس قابل للتوسعة لاحقاً.
+- **أسلحة بأشكال حقيقية** بدل النقاط: سهم بريش حقيقي، رمح، فأس يدور أثناء الطيران، قنبلة بفتيل، صاروخ بزعانف ولهب، سهم ناري بشعلة، رمح جليدي بلورّي — نفس الشكل يُستخدم في يد المحارب وأثناء الطيران لضمان الاتساق.
+- **أرض متعددة الطبقات** (سطح/تربة/صخر) بدل لون واحد مسطّح، مع ديكورات (عشب/صخور) تختفي عند سقوط قذيفة قريبة منها.
+- **خلفية متعددة الطبقات**: تدرّج سماء + شمس متوهجة + غيوم متحركة + جبال بعيدة وقريبة بعمق بصري (Parallax).
+- **كاميرا ديناميكية**: تقترب من المحارب النشط أثناء التصويب، وتتبع القذيفة أثناء الطيران، وتعود لرؤية شاملة بين الجولات.
+- **درج أسلحة قابل للطي** (مطوي افتراضياً، يعرض السلاح المختار فقط + سهم توسيع)، وواجهة علوية مضغوطة بصور دائرية للمحاربين.
+
+## هذا الإصدار مقابل الطلب الشامل
+
+هذا تطوير حقيقي وقابل للّعب الآن على أساس اللعبة السابقة، ويغطي أولويات التحسين البصري الأهم. أشياء من الطلب الأوسع (10 أنواع محاربين كاملين، 8 ساحات معارك، شاشة اختيار محارب مخصصة، نظام ترقيات وتقدّم، Tutorial تفاعلي، إعدادات إمكانية الوصول، مكتبة أصوات لكل سلاح) لم تُنفَّذ بعد ومؤجلة عمداً — البنية الحالية (Archetypes، AttackRegistry-style تعريف الأسلحة، MapDef) مصممة بحيث يسهل إضافتها تدريجياً لاحقاً دون إعادة كتابة الأساس.
+
+## تغيير اسم التطبيق أو الأيقونة
+
+- الاسم: غيّر `appName` في `capacitor.config.ts`.
+- الأيقونة: ضع صورة 1024×1024 باسم `icon.png` في مجلد جديد `resources/`، ثم استخدم أداة `@capacitor/assets` (`npx @capacitor/assets generate`) لتوليد كل أحجام الأيقونات تلقائياً لأندرويد.

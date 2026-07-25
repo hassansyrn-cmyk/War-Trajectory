@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/components/GameScreen.tsx","./src/components/MainMenu.tsx","./src/components/WarriorSelect.tsx","./src/game/assets.ts","./src/game/audio.ts","./src/game/engine.ts","./src/game/entities.ts","./src/game/physics.ts","./src/game/render.ts","./src/game/storage.ts"],"version":"5.9.3"}
