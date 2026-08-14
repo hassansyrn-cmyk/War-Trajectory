@@ -1,4 +1,4 @@
-import { ARCHETYPES, Difficulty, MAPS, MAX_STAMINA } from "../src/game/entities";
+import { ARCHETYPES, Difficulty, MAPS } from "../src/game/entities";
 import { GameState, aiChooseAndFire, createGame, fire, movePlayer, selectWeapon, update, useSkill } from "../src/game/engine";
 import { SKILLS } from "../src/game/entities";
 import { WORLD_WIDTH } from "../src/game/physics";
@@ -6,6 +6,7 @@ import { WORLD_WIDTH } from "../src/game/physics";
 let totalMatches = 0;
 let totalTurnsAcrossMatches = 0;
 let errors = 0;
+const balanceStats: Record<string, { matches: number; wins: number; turns: number }> = {};
 
 function assertFinite(label: string, v: number, ctx: string) {
   if (!Number.isFinite(v)) {
@@ -56,7 +57,7 @@ function playMatch(mapId: string, difficulty: Difficulty, archetypeId: string, s
         console.error(`Player x out of world bounds: ${p.x}`);
         errors++;
       }
-      if (p.stamina < -0.01 || p.stamina > MAX_STAMINA + 0.01) {
+      if (p.stamina < -0.01 || p.stamina > p.maxStamina + 0.01) {
         console.error(`Stamina out of range: ${p.stamina} for ${id}`);
         errors++;
       }
@@ -110,6 +111,11 @@ function playMatch(mapId: string, difficulty: Difficulty, archetypeId: string, s
   }
 
   totalTurnsAcrossMatches += turns;
+  const stats = balanceStats[archetypeId] ?? { matches: 0, wins: 0, turns: 0 };
+  stats.matches += 1;
+  stats.wins += state.winner === "p1" ? 1 : 0;
+  stats.turns += turns;
+  balanceStats[archetypeId] = stats;
 
   if (turns >= maxTurns) {
     console.error(`Match did not resolve within ${maxTurns} turns (${ctxLabel})`);
@@ -124,6 +130,43 @@ function playMatch(mapId: string, difficulty: Difficulty, archetypeId: string, s
     errors++;
   }
 }
+
+function assert(condition: boolean, message: string) {
+  if (!condition) {
+    console.error(`ASSERTION FAILED: ${message}`);
+    errors++;
+  }
+}
+
+function runTargetedAssertions() {
+  const map = MAPS[0];
+  const base = createGame(map, "normal", "viking", 1234);
+  const ninja = createGame(map, "normal", "ninja", 1234);
+  const knight = createGame(map, "normal", "knight", 1234);
+  assert(ninja.players.p1.maxStamina > base.players.p1.maxStamina, "ninja should have higher stamina than viking");
+  assert(knight.players.p1.maxHp > base.players.p1.maxHp, "knight should have higher health than viking");
+
+  const beforeIllegalSelect = base.selectedWeapon.p1;
+  selectWeapon(base, "p1", "rocket");
+  assert(base.selectedWeapon.p1 === beforeIllegalSelect, "a player must not select a weapon outside their loadout");
+
+  const normalMove = createGame(map, "normal", "ninja", 2222);
+  const frozenMove = createGame(map, "normal", "ninja", 2222);
+  frozenMove.players.p1.status.slowTurns = 2;
+  const normalX = normalMove.players.p1.x;
+  const frozenX = frozenMove.players.p1.x;
+  movePlayer(normalMove, "p1", 1, 0.5);
+  movePlayer(frozenMove, "p1", 1, 0.5);
+  assert(frozenMove.players.p1.x - frozenX < normalMove.players.p1.x - normalX, "freeze must reduce movement distance");
+
+  const standardArcher = createGame(map, "normal", "archer", 3333);
+  const scarce = createGame(map, "normal", "archer", 3333, { id: "scarce-test", nameAr: "اختبار", descriptionAr: "", limitedSpecialAmmo: true });
+  const finiteAmmo = Object.values(scarce.players.p1.ammo).filter((value) => Number.isFinite(value));
+  assert(finiteAmmo.every((value) => value >= 1), "daily modifiers must preserve at least one use of each special weapon");
+  assert(scarce.players.p1.ammo.fire === standardArcher.players.p1.ammo.fire - 1, "scarce-ammo challenge must reduce finite ammo by one");
+}
+
+runTargetedAssertions();
 
 const difficulties: Difficulty[] = ["easy", "normal", "hard"];
 
@@ -145,6 +188,10 @@ for (let i = 0; i < 12; i++) {
 console.log(`Matches simulated: ${totalMatches}`);
 console.log(`Avg turns per match: ${(totalTurnsAcrossMatches / totalMatches).toFixed(1)}`);
 console.log(`Errors: ${errors}`);
+console.log("Balance summary:");
+for (const [archetypeId, stats] of Object.entries(balanceStats)) {
+  console.log(`${archetypeId}: win rate ${((stats.wins / stats.matches) * 100).toFixed(0)}%, avg turns ${(stats.turns / stats.matches).toFixed(1)}`);
+}
 if (errors > 0) {
   process.exit(1);
 } else {

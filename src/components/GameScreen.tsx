@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Difficulty, MapDef, MAX_STAMINA, SKILLS, archetypeById } from "../game/entities";
+import { Difficulty, MapDef, MatchModifier, SKILLS, archetypeById } from "../game/entities";
 import {
   GameState,
   aiChooseAndFire,
@@ -23,6 +23,8 @@ interface Props {
   map: MapDef;
   difficulty: Difficulty;
   archetypeId: string;
+  modifier: MatchModifier | null;
+  training: boolean;
   muted: boolean;
   onExit: () => void;
 }
@@ -36,10 +38,10 @@ interface Viewport {
   deviceOffsetY: number;
 }
 
-export default function GameScreen({ map, difficulty, archetypeId, muted, onExit }: Props) {
+export default function GameScreen({ map, difficulty, archetypeId, modifier, training, muted, onExit }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const stateRef = useRef<GameState>(createGame(map, difficulty, archetypeId));
+  const stateRef = useRef<GameState>(createGame(map, difficulty, archetypeId, Date.now(), modifier));
   const viewportRef = useRef<Viewport>({ cssScale: 1, cssOffsetX: 0, cssOffsetY: 0, deviceScale: 1, deviceOffsetX: 0, deviceOffsetY: 0 });
   const aimRef = useRef({ active: false, dragX: 0, dragY: 0 });
   const dragStartRef = useRef({ x: 0, y: 0 });
@@ -49,6 +51,7 @@ export default function GameScreen({ map, difficulty, archetypeId, muted, onExit
   const rafRef = useRef<number | null>(null);
   const lastTsRef = useRef<number | null>(null);
   const resultRecordedRef = useRef(false);
+  const lastUiSyncRef = useRef(0);
 
   const [, setTick] = useState(0);
   const [confirmQuit, setConfirmQuit] = useState(false);
@@ -142,7 +145,7 @@ export default function GameScreen({ map, difficulty, archetypeId, muted, onExit
       if (state.phase === "gameOver" && !resultRecordedRef.current) {
         resultRecordedRef.current = true;
         const playerWon = state.winner === "p1";
-        recordResult(playerWon);
+        if (!training) recordResult({ won: playerWon, archetypeId, headshots: state.headshots, dailyChallenge: Boolean(modifier) });
         if (playerWon) audio.sfxWin();
         else audio.sfxLose();
       }
@@ -169,7 +172,10 @@ export default function GameScreen({ map, difficulty, archetypeId, muted, onExit
         draw(ctx, state, aimRef.current, vp.deviceScale, vp.deviceOffsetX, vp.deviceOffsetY);
       }
 
-      setTick((t) => (t + 1) % 1000000);
+      if (ts - lastUiSyncRef.current > 110) {
+        lastUiSyncRef.current = ts;
+        setTick((t) => (t + 1) % 1000000);
+      }
       rafRef.current = requestAnimationFrame(loop);
     }
     rafRef.current = requestAnimationFrame(loop);
@@ -233,7 +239,7 @@ export default function GameScreen({ map, difficulty, archetypeId, muted, onExit
   const selectedWeaponId = state.selectedWeapon.p1;
   const selectedWeapon = weaponById(selectedWeaponId);
   const selectedAmmo = p1.ammo[selectedWeaponId];
-  const staminaRatio = Math.max(0, p1.stamina / MAX_STAMINA);
+  const staminaRatio = Math.max(0, p1.stamina / p1.maxStamina);
 
   function handleSelectWeapon(id: string) {
     if (!myTurn) return;
@@ -249,7 +255,7 @@ export default function GameScreen({ map, difficulty, archetypeId, muted, onExit
   }
 
   function rematch() {
-    stateRef.current = createGame(map, difficulty, archetypeId);
+    stateRef.current = createGame(map, difficulty, archetypeId, Date.now(), modifier);
     resultRecordedRef.current = false;
     aiScheduledRoundRef.current = -1;
     moveDirRef.current = 0;
@@ -270,6 +276,7 @@ export default function GameScreen({ map, difficulty, archetypeId, muted, onExit
           </div>
         </div>
       )}
+      {(training || modifier || state.map.effect) && <div className="match-mode-badge">{training ? "تدريب: طبّق السحب والحركة والرياح" : modifier ? `${modifier.nameAr}: ${modifier.descriptionAr}` : `${state.map.effectLabelAr}: ${state.map.effectDescriptionAr}`}</div>}
       <div className="hud-top">
         <div className={"hud-player p1" + (state.turn === "p1" ? " active" : "")}>
           <span
@@ -434,7 +441,7 @@ export default function GameScreen({ map, difficulty, archetypeId, muted, onExit
         <div className="overlay">
           <div className="overlay-card">
             <h2>{state.winner === "p1" ? "🏆 فزت بالمباراة!" : "خسرت هذه الجولة"}</h2>
-            <p>{state.winner === "p1" ? "أحسنت! جرّب خريطة أو مستوى صعوبة مختلف." : "لا بأس، حاول مجدداً وعدّل تكتيكك."}</p>
+            <p>{training ? "انتهى التدريب. أصبحت جاهزاً للمباراة الحقيقية." : state.winner === "p1" ? `أحسنت! حققت ${state.headshots} إصابة بالرأس.` : "لا بأس، حاول مجدداً وعدّل تكتيكك."}</p>
             <div className="overlay-actions">
               <button className="primary-btn" onClick={rematch}>
                 مباراة جديدة

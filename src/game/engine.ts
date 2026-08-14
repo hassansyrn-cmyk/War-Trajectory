@@ -4,7 +4,7 @@ import {
   FloatingText,
   GamePhase,
   MapDef,
-  MAX_STAMINA,
+  MatchModifier,
   Particle,
   PlayerId,
   PlayerState,
@@ -52,6 +52,7 @@ export interface Camera {
 
 export interface GameState {
   map: MapDef;
+  modifier: MatchModifier | null;
   terrain: number[];
   decorations: Decoration[];
   wind: number;
@@ -70,6 +71,7 @@ export interface GameState {
   log: string[];
   camera: Camera;
   elapsed: number; // monotonic game clock in seconds, used for animation timing
+  headshots: number;
 }
 
 export { weaponById };
@@ -97,23 +99,25 @@ export function createGame(
   map: MapDef,
   difficulty: Difficulty,
   playerArchetypeId: string = "viking",
-  seed = Date.now()
+  seed = Date.now(),
+  modifier: MatchModifier | null = null
 ): GameState {
   const terrain = generateTerrain(seed, map.roughness);
   const decorations = generateDecorations(seed);
   const p1x = WORLD_WIDTH * 0.14;
   const p2x = WORLD_WIDTH * 0.86;
   const opponentPool = ARCHETYPES.map((a) => a.id).filter((id) => id !== playerArchetypeId);
-  const opponentArchetypeId = opponentPool[Math.floor(Math.random() * opponentPool.length)] ?? playerArchetypeId;
+  const opponentArchetypeId = opponentPool[Math.abs(Math.floor(seed * 0.0001)) % Math.max(1, opponentPool.length)] ?? playerArchetypeId;
   const players: Record<PlayerId, PlayerState> = {
-    p1: makePlayer("p1", "أنت", p1x, 1, playerArchetypeId),
-    p2: makePlayer("p2", "الخصم", p2x, -1, opponentArchetypeId),
+    p1: makePlayer("p1", "أنت", p1x, 1, playerArchetypeId, modifier ?? undefined),
+    p2: makePlayer("p2", "الخصم", p2x, -1, opponentArchetypeId, modifier ?? undefined),
   };
   return {
     map,
+    modifier,
     terrain,
     decorations,
-    wind: randomWind(map.windRange),
+    wind: randomWind(map.windRange * (modifier?.windMultiplier ?? 1)),
     turn: "p1",
     phase: "aiming",
     players,
@@ -129,6 +133,7 @@ export function createGame(
     log: [],
     camera: { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2, zoom: 1 },
     elapsed: 0,
+    headshots: 0,
   };
 }
 
@@ -179,8 +184,10 @@ export function movePlayer(state: GameState, playerId: PlayerId, direction: 1 | 
   const player = state.players[playerId];
   if (player.stamina <= 0) return false;
 
+  const archetype = archetypeById(player.archetype);
+  const slowMultiplier = player.status.slowTurns > 0 ? 0.65 : 1;
   const opponent = state.players[opponentOf(playerId)];
-  const maxDistance = MOVE_SPEED * dt;
+  const maxDistance = MOVE_SPEED * dt * archetype.moveSpeedMultiplier * slowMultiplier;
   const staminaLimited = Math.min(maxDistance, player.stamina);
   const minX = WORLD_WIDTH * 0.04;
   const maxX = WORLD_WIDTH * 0.96;
@@ -207,7 +214,10 @@ export function canFire(state: GameState, playerId: PlayerId): boolean {
 }
 
 function weaponDamageFor(shooter: PlayerState, weapon: WeaponDef): number {
-  return weapon.damage;
+  const archetype = archetypeById(shooter.archetype);
+  const signature = weaponById(archetype.signatureWeapon);
+  const isSignature = weapon.id === signature.id || weapon.type === signature.type;
+  return weapon.damage * (isSignature ? 1 + archetype.signatureDamageBonus : 1);
 }
 
 // dragX/dragY: world-space vector from the player toward the drag point.
@@ -270,8 +280,10 @@ function spawnBurst(state: GameState, x: number, y: number, color: string, count
 }
 
 function applyExplosion(state: GameState, impactX: number, impactY: number, weapon: WeaponDef, shooterId: PlayerId) {
-  const radius = weapon.splashRadius > 0 ? weapon.splashRadius : PLAYER_HIT_RADIUS;
   const shooter = state.players[shooterId];
+  const shooterArchetype = archetypeById(shooter.archetype);
+  const radiusBonus = weapon.splashRadius > 0 && shooterArchetype.id === "engineer" ? 1.1 : 1;
+  const radius = (weapon.splashRadius > 0 ? weapon.splashRadius : PLAYER_HIT_RADIUS) * radiusBonus;
   const baseDamage = weaponDamageFor(shooter, weapon);
   const ids: PlayerId[] = ["p1", "p2"];
   for (const id of ids) {
@@ -283,7 +295,7 @@ function applyExplosion(state: GameState, impactX: number, impactY: number, weap
     const factor = clamp(1 - d / radius, 0.12, 1);
     const headBottom = feetY - PLAYER_HEIGHT + PLAYER_HEIGHT * 0.38;
     const zone: "head" | "body" = impactY <= headBottom ? "head" : "body";
-    const zoneMult = zone === "head" ? HEAD_MULT : 1;
+    const zoneMult = zone === "head" ? HEAD_MULT * (state.modifier?.headshotMultiplier ?? 1) : 1;
     let dmg = baseDamage * factor * zoneMult;
     if (id === shooterId) dmg *= 0.6; // self-damage softened
     dmg *= shooter.damageMultiplierNext;
@@ -295,6 +307,7 @@ function applyExplosion(state: GameState, impactX: number, impactY: number, weap
 function applyDamage(state: GameState, targetId: PlayerId, rawDmg: number, weapon: WeaponDef, shooterId: PlayerId, zone: "head" | "body") {
   const target = state.players[targetId];
   let dmg = rawDmg;
+  if (weapon.splashRadius > 0) dmg *= 1 - archetypeById(target.archetype).explosionResistance;
   if (target.status.shieldActive) {
     dmg *= 0.5;
     target.status.shieldActive = false;
@@ -302,12 +315,13 @@ function applyDamage(state: GameState, targetId: PlayerId, rawDmg: number, weapo
   dmg = Math.max(0, Math.round(dmg));
   target.hp = clamp(target.hp - dmg, 0, target.maxHp);
 
+  if (zone === "head" && shooterId === "p1" && targetId !== shooterId) state.headshots += 1;
   const feetY = playerFeetY(state, targetId);
   pushFloater(state, target.x, feetY - PLAYER_HEIGHT - 10, (zone === "head" ? "🎯 " : "") + "-" + dmg, zone === "head" ? "#facc15" : "#ffffff");
   spawnBurst(state, target.x, feetY - PLAYER_HEIGHT * 0.6, weapon.colorMain, 16, 90);
 
   if (weapon.burnTurns && dmg > 0) {
-    target.status.burnTurns = weapon.burnTurns;
+    target.status.burnTurns = weapon.burnTurns + (state.map.effect === "ember" ? 1 : 0);
     target.status.burnDamagePerTurn = weapon.burnDamagePerTurn ?? 4;
   }
   if (weapon.slowTurns && dmg > 0) {
@@ -335,7 +349,7 @@ function handleTerrainImpact(state: GameState, proj: Projectile) {
     return;
   }
   const craterRadius = weapon.splashRadius > 0 ? weapon.splashRadius * 0.95 : 15;
-  const craterDepth = weapon.splashRadius > 0 ? 30 : 9;
+  const craterDepth = (weapon.splashRadius > 0 ? 30 : 9) * (state.modifier?.fragileTerrain ? 1.35 : 1);
   state.terrain = deformTerrain(state.terrain, proj.x, craterRadius, craterDepth);
   state.decorations = state.decorations.filter((d) => Math.abs(d.x - proj.x) > craterRadius * 0.8);
   spawnBurst(state, proj.x, proj.y, weapon.colorMain, weapon.splashRadius > 0 ? 26 : 10, weapon.splashRadius > 0 ? 150 : 70);
@@ -455,12 +469,13 @@ function stepProjectile(state: GameState, proj: Projectile, dt: number) {
       const zone: "head" | "body" = proj.y <= headBottom ? "head" : "body";
       if (proj.weapon.splashRadius > 0) {
         spawnBurst(state, proj.x, proj.y, proj.weapon.colorMain, 26, 150);
-        state.terrain = deformTerrain(state.terrain, proj.x, proj.weapon.splashRadius * 0.9, 26);
+        const craterScale = state.modifier?.fragileTerrain ? 1.3 : 1;
+        state.terrain = deformTerrain(state.terrain, proj.x, proj.weapon.splashRadius * 0.9, 26 * craterScale);
         state.decorations = state.decorations.filter((d) => Math.abs(d.x - proj.x) > proj.weapon.splashRadius * 0.7);
         applyExplosion(state, proj.x, proj.y, proj.weapon, proj.ownerId);
       } else {
         const shooter = state.players[proj.ownerId];
-        let dmg = weaponDamageFor(shooter, proj.weapon) * (zone === "head" ? HEAD_MULT : 1) * shooter.damageMultiplierNext;
+        let dmg = weaponDamageFor(shooter, proj.weapon) * (zone === "head" ? HEAD_MULT * (state.modifier?.headshotMultiplier ?? 1) : 1) * shooter.damageMultiplierNext;
         shooter.damageMultiplierNext = 1;
         applyDamage(state, id, dmg, proj.weapon, proj.ownerId, zone);
         spawnBurst(state, proj.x, proj.y, proj.weapon.colorMain, 14, 90);
@@ -490,7 +505,7 @@ function tickStatusForTurnStart(state: GameState, playerId: PlayerId) {
   }
   if (player.status.slowTurns > 0) player.status.slowTurns -= 1;
   player.energy = Math.min(5, player.energy + 1);
-  player.stamina = MAX_STAMINA;
+  player.stamina = player.maxStamina;
   player.isMoving = false;
   for (const s of SKILLS) {
     if (player.cooldowns[s.id] > 0) player.cooldowns[s.id] -= 1;
@@ -503,7 +518,7 @@ export function endTurn(state: GameState) {
     return;
   }
   state.turn = opponentOf(state.turn);
-  state.wind = randomWind(state.map.windRange);
+  state.wind = randomWind(state.map.windRange * (state.modifier?.windMultiplier ?? 1));
   state.selectedWeapon[state.turn] = pickDefaultWeapon(state, state.turn);
   state.phase = "aiming";
   state.round += 1;
@@ -547,12 +562,12 @@ export function aiChooseAndFire(state: GameState, playerId: PlayerId) {
     useSkill(state, playerId, "shield");
   }
 
-  // Light tactical repositioning: occasionally nudge closer/further before
-  // firing, spending a modest chunk of the turn's stamina.
-  if (Math.random() < 0.35 && player.stamina > 20) {
-    const dir: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
-    const holdSeconds = 0.4 + Math.random() * 0.8;
-    movePlayer(state, playerId, dir, holdSeconds);
+  // Archetype-aware positioning gives the AI a readable combat personality.
+  if (Math.random() < 0.42 && player.stamina > 20) {
+    const towardTarget: 1 | -1 = target.x > player.x ? 1 : -1;
+    const retreat: 1 | -1 = towardTarget === 1 ? -1 : 1;
+    const dir: 1 | -1 = archetype.id === "viking" ? towardTarget : archetype.id === "engineer" ? retreat : Math.random() < 0.58 ? towardTarget : retreat;
+    movePlayer(state, playerId, dir, archetype.id === "ninja" ? 0.7 : 0.5);
   }
 
   const feetY = playerFeetY(state, playerId);

@@ -44,6 +44,7 @@ export default function WarriorSelect({ initialArchetypeId, onConfirm, onBack }:
       <div className="select-info">
         <h2>{archetype.nameAr}</h2>
         <p className="select-role">{archetype.roleAr}</p>
+        <p className="select-perk">{archetype.perkAr} · صحة {archetype.maxHp} · تحمّل {archetype.maxStamina}</p>
       </div>
 
       <div className="select-loadout">

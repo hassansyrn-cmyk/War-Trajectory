@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from "react";
 import MainMenu from "./components/MainMenu";
+import TutorialScreen from "./components/TutorialScreen";
 import WarriorSelect from "./components/WarriorSelect";
 import GameScreen from "./components/GameScreen";
-import { Difficulty, MapDef } from "./game/entities";
+import { Difficulty, MapDef, MatchModifier, MAPS, challengeForDate } from "./game/entities";
 import { loadSave, saveSave } from "./game/storage";
 import { loadAssets } from "./game/assets";
 
-type Screen = "menu" | "select" | "game";
+type Screen = "menu" | "tutorial" | "select" | "game";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("menu");
@@ -14,23 +15,23 @@ export default function App() {
   const [activeMap, setActiveMap] = useState<MapDef | null>(null);
   const [activeDifficulty, setActiveDifficulty] = useState<Difficulty>("normal");
   const [activeArchetypeId, setActiveArchetypeId] = useState<string>(save.lastArchetypeId);
+  const [activeModifier, setActiveModifier] = useState<MatchModifier | null>(null);
+  const [training, setTraining] = useState(false);
 
   useEffect(() => {
-    // Fire-and-forget: by the time the player taps "start match" the sprite
-    // sheets are usually already cached. GameScreen still gates on this
-    // promise itself in case the player is fast.
     loadAssets().catch(() => {
-      // Missing/renamed asset files — the renderer falls back to simple
-      // shapes per-sprite rather than blocking the whole game.
+      // The renderer keeps its visual fallback if a non-critical sprite is unavailable.
     });
   }, []);
 
-  function handlePickMapDifficulty(map: MapDef, difficulty: Difficulty) {
+  function prepareMatch(map: MapDef, difficulty: Difficulty, modifier: MatchModifier | null = null) {
     const next = { ...save, lastMapId: map.id, lastDifficulty: difficulty };
     setSave(next);
     saveSave(next);
     setActiveMap(map);
     setActiveDifficulty(difficulty);
+    setActiveModifier(modifier);
+    setTraining(false);
     setScreen("select");
   }
 
@@ -42,8 +43,18 @@ export default function App() {
     setScreen("game");
   }
 
+  function startTraining() {
+    setActiveMap(MAPS[0]);
+    setActiveDifficulty("easy");
+    setActiveArchetypeId("archer");
+    setActiveModifier(null);
+    setTraining(true);
+    setScreen("game");
+  }
+
   function handleExit() {
     setSave(loadSave());
+    setTraining(false);
     setScreen("menu");
   }
 
@@ -55,13 +66,10 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      {screen === "menu" && <MainMenu save={save} onStart={handlePickMapDifficulty} onToggleMute={toggleMute} />}
-      {screen === "select" && (
-        <WarriorSelect initialArchetypeId={activeArchetypeId} onConfirm={handleConfirmWarrior} onBack={() => setScreen("menu")} />
-      )}
-      {screen === "game" && activeMap && (
-        <GameScreen map={activeMap} difficulty={activeDifficulty} archetypeId={activeArchetypeId} muted={save.muted} onExit={handleExit} />
-      )}
+      {screen === "menu" && <MainMenu save={save} onStart={(map, difficulty) => prepareMatch(map, difficulty)} onDaily={(map, difficulty) => prepareMatch(map, difficulty, challengeForDate())} onTutorial={() => setScreen("tutorial")} onToggleMute={toggleMute} />}
+      {screen === "tutorial" && <TutorialScreen onPractice={startTraining} onExit={() => setScreen("menu")} />}
+      {screen === "select" && <WarriorSelect initialArchetypeId={activeArchetypeId} onConfirm={handleConfirmWarrior} onBack={() => setScreen("menu")} />}
+      {screen === "game" && activeMap && <GameScreen map={activeMap} difficulty={activeDifficulty} archetypeId={activeArchetypeId} modifier={activeModifier} training={training} muted={save.muted} onExit={handleExit} />}
     </div>
   );
 }

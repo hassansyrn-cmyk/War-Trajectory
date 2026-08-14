@@ -792,3 +792,70 @@ body {
 .select-dot.active {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
 }
+
+
+/* ---------- Progression, tutorial, and match modifiers ---------- */
+.daily-card {
+  width: 100%;
+  max-width: 420px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  text-align: right;
+  padding: 11px 13px;
+  border: 1px solid rgba(103, 232, 249, 0.35);
+  border-radius: 14px;
+  background: linear-gradient(110deg, rgba(103, 232, 249, 0.12), rgba(244, 212, 136, 0.1));
+  color: #e8edf5;
+}
+
+.daily-badge, .daily-reward {
+  font-size: 10px;
+  color: #67e8f9;
+  font-weight: 800;
+}
+
+.daily-title { font-size: 13px; font-weight: 800; }
+.daily-desc { grid-column: 2 / 4; font-size: 11px; color: #b8c4d9; }
+.map-card { flex-direction: column; gap: 3px; }
+.map-card small { font-size: 9px; opacity: 0.82; }
+.map-effect-note { margin: 7px 2px 0; color: #9aa4b8; font-size: 11px; }
+.tutorial-btn {
+  width: 100%; max-width: 420px; padding: 11px 0; border-radius: 12px;
+  border: 1px solid rgba(103, 232, 249, 0.35); background: rgba(103, 232, 249, 0.08);
+  color: #c7f8ff; font-weight: 700;
+}
+
+.tutorial-root {
+  min-height: 100%; display: flex; flex-direction: column; align-items: center; gap: 24px;
+  padding: max(16px, env(safe-area-inset-top)) 20px 24px;
+  background: radial-gradient(circle at 50% 10%, #183f5c 0%, #0b1220 68%);
+}
+
+.tutorial-card {
+  width: 100%; max-width: 420px; text-align: center; padding: 28px 24px;
+  border-radius: 20px; border: 1px solid rgba(103, 232, 249, 0.24); background: rgba(17, 26, 48, 0.92);
+}
+
+.tutorial-card h2 { margin: 12px 0; color: #f4d488; font-size: 22px; }
+.tutorial-card p { min-height: 72px; color: #cbd3e1; line-height: 1.8; margin: 0 0 24px; }
+.tutorial-step { color: #67e8f9; font-size: 12px; font-weight: 800; }
+.tutorial-dots { display: flex; justify-content: center; gap: 7px; margin: 14px 0 24px; }
+.tutorial-dots span { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.18); }
+.tutorial-dots span.active { background: #f4d488; box-shadow: 0 0 0 3px rgba(244,212,136,.18); }
+.match-mode-badge {
+  position: absolute; top: 44px; left: 50%; transform: translateX(-50%); z-index: 7;
+  max-width: min(540px, 78vw); padding: 5px 12px; border-radius: 999px;
+  background: rgba(8, 17, 34, .78); border: 1px solid rgba(244, 212, 136, .35);
+  color: #f7e5a7; font-size: 11px; text-align: center; pointer-events: none;
+}
+.select-perk {
+  max-width: 360px; margin: 8px auto 0; padding: 8px 10px; border-radius: 10px;
+  background: rgba(103, 232, 249, .08); color: #c7f8ff; font-size: 12px; text-align: center;
+}
+
+@media (max-height: 600px) and (orientation: landscape) {
+  .match-mode-badge { top: 38px; font-size: 10px; }
+  .daily-card { padding: 8px 11px; }
+}

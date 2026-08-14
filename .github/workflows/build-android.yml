@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - "feature/**"
+      - "wtm-**"
   pull_request:
     branches:
       - main
@@ -29,6 +30,9 @@ jobs:
 
       - name: Build web application
         run: npm run build
+
+      - name: Run gameplay simulation
+        run: npm test
 
       - name: Sync Capacitor Android
         run: npx cap sync android
